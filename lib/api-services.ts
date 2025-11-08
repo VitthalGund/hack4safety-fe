@@ -1,5 +1,6 @@
 import { Case } from "@/types/case";
 import apiClient from "./api-client";
+import { useQuery } from "@tanstack/react-query";
 
 // --- Types and Functions for Trends Chart ---
 interface TrendApiResponse {
@@ -490,3 +491,203 @@ export async function askLegalBot(query: string, model: string = "gemini") {
 export async function askCaseBot(query: string, model: string = "gemini") {
   return apiClient.post("/rag/cases", { query, model_provider: model });
 }
+
+/**
+ * Defines the structure for the case filter parameters.
+ */
+type CaseFilterParams = {
+  district?: string;
+  court_name?: string;
+  result?: string;
+};
+
+/**
+ * Defines the response structure for the metadata fields API.
+ * This is used to populate the dropdowns.
+ */
+type MetadataFields = {
+  sections_of_law: string[];
+  courts: string[];
+  judges: string[];
+  districts: string[];
+  police_stations: string[];
+  io_names: string[];
+  pp_names: string[];
+  // Note: The 'result' field is static ["Conviction", "Acquittal"]
+  // and handled in the component, so it's not expected from this API.
+};
+
+// --- API Functions ---
+
+/**
+ * Fetches the list of cases based on a search query and filters.
+ * @param q - The main search term (for case number, accused, etc.)
+ * @param filters - An object containing structured filters (district, court, etc.)
+ * @returns A promise that resolves to an array of Case objects.
+ */
+const getCases = async (
+  q: string,
+  filters: CaseFilterParams
+): Promise<Case[]> => {
+  const params = new URLSearchParams();
+
+  // Add main search query if it exists
+  if (q) {
+    // The backend's /api/v1/cases.py search endpoint uses these fields for 'q'
+    // This is a simulated 'q' parameter as the backend code you provided
+    // doesn't have a single 'q' param, but separate fields.
+    // We will map 'q' to the fields the backend *does* support.
+    // A better backend implementation would have a single 'q' text search.
+    // For now, we'll assume 'q' maps to 'accused_name' as a primary text search.
+    params.append("accused_name", q);
+    // You can add more fields here if your backend 'q' searches them
+    // params.append("sections_of_law", q);
+    // params.append("investigating_officer", q);
+  }
+
+  // Add filter parameters, skipping empty/undefined values
+  (Object.keys(filters) as Array<keyof CaseFilterParams>).forEach((key) => {
+    const value = filters[key];
+    if (value) {
+      params.append(key, value);
+    }
+  });
+
+  const { data } = await apiClient.get("/api/v1/cases/search", { params });
+  return data;
+};
+
+/**
+ * Fetches the consolidated metadata for all filter dropdowns.
+ * @returns A promise that resolves to the MetadataFields object.
+ */
+const getMetadataFields = async (): Promise<MetadataFields> => {
+  // This endpoint is not in the provided backend code.
+  // The backend has `/api/v1/metadata/distinct/{field_name}`.
+  // A true implementation would call this multiple times.
+  // We will simulate the *planned* `/api/v1/metadata/fields` endpoint
+  // by calling the `distinct` endpoint for each required field.
+
+  const fetchField = async (field: string) => {
+    try {
+      const { data } = await apiClient.get(`/metadata/distinct/${field}`);
+      return data;
+    } catch (error) {
+      console.error(`Failed to fetch metadata for ${field}:`, error);
+      return []; // Return empty array on error
+    }
+  };
+
+  // Fetch all metadata fields in parallel
+  const [
+    districts,
+    courts,
+    judges,
+    police_stations,
+    io_names,
+    pp_names,
+    sections_of_law,
+  ] = await Promise.all([
+    fetchField("District"),
+    fetchField("Court_Name"),
+    fetchField("Judge_Name"), // Assuming this exists in your data
+    fetchField("Police_Station"),
+    fetchField("Investigating_Officer"),
+    fetchField("PP_Name"), // Assuming this exists in your data
+    fetchField("Sections_of_Law"), // Assuming this exists
+  ]);
+
+  return {
+    districts,
+    courts,
+    judges,
+    police_stations,
+    io_names,
+    pp_names,
+    sections_of_law,
+  };
+};
+
+// --- React Query Hooks ---
+
+/**
+ * A custom React Query hook to fetch cases.
+ * It automatically refetches when 'q' or 'filters' change.
+ */
+export const useGetCases = (q: string, filters: CaseFilterParams) => {
+  return useQuery<Case[], Error>({
+    queryKey: ["cases", q, filters], // This key auto-refetches when q or filters change
+    queryFn: () => getCases(q, filters),
+  });
+};
+
+/**
+ * A custom React Query hook to fetch all metadata fields for dropdowns.
+ * This data is cached and re-used across the app.
+ */
+export const useGetMetadataFields = () => {
+  return useQuery<MetadataFields, Error>({
+    queryKey: ["metadataFields"],
+    queryFn: getMetadataFields,
+    staleTime: 1000 * 60 * 5, // Cache for 5 minutes
+    refetchOnWindowFocus: false, // Don't refetch on window focus
+  });
+};
+
+// --- Accused 360 Hooks (from plan) ---
+// These are not used by Case Explorer but are part of the plan
+
+type AccusedSearchResult = {
+  id: string;
+  name: string;
+  alias: string;
+  case_count: number;
+};
+
+type AccusedProfile = {
+  id: string;
+  name: string;
+  aliases: string[];
+  is_habitual_offender: boolean;
+  case_history: Case[];
+};
+
+const searchAccused = async (q: string): Promise<AccusedSearchResult[]> => {
+  // This API is not in the provided backend code, we are assuming its future implementation
+  // For now, we'll return a mock. Replace with:
+  // const { data } = await apiClient.get(`/api/v1/accused/search?q=${q}`);
+  // return data;
+  if (!q) return [];
+  return [
+    { id: "mock-123", name: "Mock Accused", alias: "Mocky", case_count: 2 },
+  ];
+};
+
+const getAccusedById = async (id: string): Promise<AccusedProfile> => {
+  // This API is not in the provided backend code, we are assuming its future implementation
+  // For now, we'll return a mock. Replace with:
+  // const { data } = await apiClient.get(`/api/v1/accused/${id}`);
+  // return data;
+  return {
+    id: id,
+    name: "Mock Accused",
+    aliases: ["Mocky"],
+    is_habitual_offender: true,
+    case_history: [],
+  };
+};
+
+export const useSearchAccused = (q: string) => {
+  return useQuery<AccusedSearchResult[], Error>({
+    queryKey: ["accusedSearch", q],
+    queryFn: () => searchAccused(q),
+  });
+};
+
+export const useGetAccusedById = (id: string | null) => {
+  return useQuery<AccusedProfile, Error>({
+    queryKey: ["accusedProfile", id],
+    queryFn: () => getAccusedById(id!),
+    enabled: !!id, // Only run the query if an ID is provided
+  });
+};

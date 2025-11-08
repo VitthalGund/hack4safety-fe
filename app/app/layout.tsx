@@ -1,25 +1,26 @@
-"use client"
+"use client";
 
-import type React from "react"
+import type React from "react";
 
-import { ProtectedRoute } from "@/components/protected-route"
-import AppSidebar from "@/components/app/sidebar"
-import AppHeader from "@/components/app/header"
+import { ProtectedRoute } from "@/components/protected-route";
+import AppSidebar from "@/components/app/sidebar";
+import AppHeader from "@/components/app/header";
+import { QueryProvider } from "@/components/query-provider";
 
-export default function AppLayout({
-  children,
-}: {
-  children: React.ReactNode
-}) {
+export default function AppLayout({ children }: { children: React.ReactNode }) {
   return (
-    <ProtectedRoute>
-      <div className="flex h-screen bg-white dark:bg-[#0F1729] overflow-hidden">
-        <AppSidebar />
-        <div className="flex-1 flex flex-col overflow-hidden">
-          <AppHeader />
-          <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50">{children}</main>
+    <QueryProvider>
+      <ProtectedRoute>
+        <div className="flex h-screen bg-white dark:bg-[#0F1729] overflow-hidden">
+          <AppSidebar />
+          <div className="flex-1 flex flex-col overflow-hidden">
+            <AppHeader />
+            <main className="flex-1 overflow-auto bg-slate-50 dark:bg-slate-900/50">
+              {children}
+            </main>
+          </div>
         </div>
-      </div>
-    </ProtectedRoute>
-  )
+      </ProtectedRoute>
+    </QueryProvider>
+  );
 }
