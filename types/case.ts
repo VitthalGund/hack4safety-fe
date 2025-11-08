@@ -1,5 +1,3 @@
-// In types/case.ts
-
 export interface Case {
   _id: string; // MongoDB ID
   Case_Number: string;
@@ -17,5 +15,5 @@ export interface Case {
   Duration_of_Trial_days: number;
   Result: "Conviction" | "Acquitted" | string; // Allow other strings
   Nature_of_Offence: string;
-  // Add any other fields that come from the backend
+  Summary: string;
 }

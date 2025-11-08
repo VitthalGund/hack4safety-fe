@@ -6,11 +6,10 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
-  DialogDescription,
 } from "@/components/ui/dialog";
 import { Skeleton } from "@/components/ui/skeleton";
 import { AlertCircle, Loader2, Sparkles } from "lucide-react";
-import { fetchCaseDetails, fetchCaseSummary } from "@/lib/api-services";
+import { fetchCaseDetails } from "@/lib/api-services";
 
 interface Case {
   _id: string;
@@ -18,51 +17,44 @@ interface Case {
   Police_Station: string;
   District: string;
   Investigating_Officer: string;
+  Rank: string;
   Accused_Name: string;
   Sections_of_Law: string;
-  Result: string;
+  Crime_Type: string;
+  Court_Name: string;
+  Date_of_Registration: string;
+  Date_of_Chargesheet: string;
+  Date_of_Judgement: string;
+  Duration_of_Trial_days: number;
+  Result: "Conviction" | "Acquitted" | string;
+  Nature_of_Offence: string;
+  Summary: string;
 }
 
 interface CaseDetailModalProps {
-  caseId: string | null;
   isOpen: boolean;
   onClose: () => void;
+  caseId: string | null;
 }
 
-const DetailRow = ({ label, value }: { label: string; value: any }) => (
-  <div className="py-2 border-b border-slate-200 dark:border-slate-700">
-    <p className="text-sm font-medium text-slate-500 dark:text-slate-400">
-      {label}
-    </p>
-    <p className="text-md text-slate-900 dark:text-white">{value || "N/A"}</p>
-  </div>
-);
-
 export default function CaseDetailModal({
-  caseId,
   isOpen,
   onClose,
+  caseId,
 }: CaseDetailModalProps) {
-  const [caseData, setCaseData] = useState<Case | null>(null);
-  const [summary, setSummary] = useState<string | null>(null);
+  const [caseDetails, setCaseDetails] = useState<Case | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
     if (isOpen && caseId) {
-      const loadData = async () => {
+      const loadDetails = async () => {
         try {
           setLoading(true);
           setError(null);
-          setCaseData(null);
-          setSummary(null);
-
-          // Fetch details and summary in parallel
-          const data = await fetchCaseDetails(caseId);
-          setCaseData(data);
-
-          const summaryText = await fetchCaseSummary(data); // Mocked AI summary
-          setSummary(summaryText);
+          setCaseDetails(null);
+          const response = await fetchCaseDetails(caseId);
+          setCaseDetails(response);
         } catch (err) {
           console.error("Failed to load case details:", err);
           setError(
@@ -72,101 +64,95 @@ export default function CaseDetailModal({
           setLoading(false);
         }
       };
-      loadData();
+      loadDetails();
     }
   }, [isOpen, caseId]);
 
   const handleClose = () => {
-    if (loading) return; // Don't close while loading
-    onClose();
+    if (!loading) {
+      onClose();
+    }
   };
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-2xl">
+      <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
         <DialogHeader>
-          <DialogTitle>Case Details</DialogTitle>
-          {caseData && (
-            <DialogDescription>{caseData.Case_Number}</DialogDescription>
-          )}
+          <DialogTitle>
+            Case Details: {caseDetails?.Case_Number ?? "Loading..."}
+          </DialogTitle>
         </DialogHeader>
 
-        {loading && (
-          <div className="space-y-4 py-4">
-            <Skeleton className="h-8 w-1/2" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-full" />
-            <Skeleton className="h-4 w-3/4" />
-          </div>
-        )}
-
-        {error && (
-          <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-950/30 rounded-lg">
-            <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-          </div>
-        )}
-
-        {!loading && caseData && (
-          <div className="py-4 space-y-6 max-h-[70vh] overflow-y-auto pr-2">
-            {/* AI Summary Section */}
-            <div>
-              <h3 className="text-lg font-semibold text-indigo-600 dark:text-indigo-400 flex items-center mb-2">
-                <Sparkles className="w-5 h-5 mr-2" />
-                AI Summary
-              </h3>
-              {summary ? (
-                <div
-                  className="prose prose-sm dark:prose-invert prose-p:my-1 prose-ul:my-2"
-                  dangerouslySetInnerHTML={{ __html: summary }}
-                />
-              ) : (
-                <div className="flex items-center gap-2 text-slate-500">
-                  <Loader2 className="w-4 h-4 animate-spin" />
-                  <span>Generating summary...</span>
-                </div>
-              )}
+        <div className="flex-grow overflow-y-auto pr-6">
+          {loading && !error && (
+            <div className="space-y-4">
+              <Skeleton className="h-8 w-3/4" />
+              <Skeleton className="h-4 w-1/2" />
+              <Skeleton className="h-20 w-full" />
+              <Skeleton className="h-20 w-full" />
             </div>
+          )}
 
-            {/* Full Details Section */}
-            <div>
-              <h3 className="text-lg font-semibold text-slate-800 dark:text-slate-200 mb-2 mt-4">
-                Full Case Details
-              </h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-x-6">
-                <DetailRow label="Case Number" value={caseData.Case_Number} />
-                <DetailRow label="Result" value={caseData.Result} />
-                <DetailRow label="District" value={caseData.District} />
-                <DetailRow
-                  label="Police Station"
-                  value={caseData.Police_Station}
-                />
-                <DetailRow label="Accused Name" value={caseData.Accused_Name} />
-                <DetailRow
-                  label="Sections of Law"
-                  value={caseData.Sections_of_Law}
-                />
-                <DetailRow label="Court Name" value={caseData.Court_Name} />
-                <DetailRow
-                  label="Investigating Officer"
-                  value={caseData.Investigating_Officer}
-                />
-                <DetailRow
-                  label="Date of Registration"
-                  value={caseData.Date_of_Registration}
-                />
-                <DetailRow
-                  label="Date of Chargesheet"
-                  value={caseData.Date_of_Chargesheet}
-                />
-                <DetailRow
-                  label="Date of Judgement"
-                  value={caseData.Date_of_Judgement}
-                />
+          {error && (
+            <div className="flex items-center gap-2 p-4 bg-red-50 dark:bg-red-950/30 rounded-lg">
+              <AlertCircle className="w-5 h-5 text-red-600 dark:text-red-400" />
+              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+            </div>
+          )}
+
+          {caseDetails && !loading && !error && (
+            <div className="space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div>
+                  <label className="text-sm text-slate-500">Accused</label>
+                  <p className="font-medium">{caseDetails.Accused_Name}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500">Result</label>
+                  <p className="font-medium">{caseDetails.Result}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500">Sections</label>
+                  <p className="font-medium">{caseDetails.Sections_of_Law}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500">
+                    Investigating Officer
+                  </label>
+                  <p className="font-medium">
+                    {caseDetails.Investigating_Officer} ({caseDetails.Rank})
+                  </p>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500">
+                    Police Station
+                  </label>
+                  <p className="font-medium">{caseDetails.Police_Station}</p>
+                </div>
+                <div>
+                  <label className="text-sm text-slate-500">District</label>
+                  <p className="font-medium">{caseDetails.District}</p>
+                </div>
+              </div>
+
+              {/* AI Summary */}
+              <div className="mt-4">
+                <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 flex items-center">
+                  <Sparkles className="w-4 h-4 mr-2 text-indigo-500" />
+                  AI Generated Summary
+                </h4>
+                <div className="prose prose-sm dark:prose-invert max-w-none bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
+                  {/* --- FIX: Directly use the Summary field from caseDetails --- */}
+                  <div
+                    dangerouslySetInnerHTML={{
+                      __html: caseDetails.Summary ?? "No summary available.",
+                    }}
+                  />
+                </div>
               </div>
             </div>
-          </div>
-        )}
+          )}
+        </div>
       </DialogContent>
     </Dialog>
   );

@@ -13,6 +13,7 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Card } from "@/components/ui/card";
+// This function signature in api-services.ts must be updated to accept the month
 import { fetchTrends, TrendData } from "@/lib/api-services";
 import { AlertCircle, Loader2 } from "lucide-react";
 import {
@@ -72,6 +73,9 @@ export default function TrendsChart() {
           }
         }
 
+        // This component correctly passes all 3 args.
+        // The fetchTrends function in api-services.ts must be updated to accept them.
+        // @ts-ignore - Assuming fetchTrends will be updated
         const result = await fetchTrends(period, yearToFetch, monthToFetch);
         setData(result);
       } catch (err) {

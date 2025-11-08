@@ -14,10 +14,11 @@ import {
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { AlertCircle, ArrowRight, Loader2 } from "lucide-react";
+import { AlertCircle, ArrowRight, Loader2, Search } from "lucide-react"; // <-- Import Search
+import { Input } from "@/components/ui/input"; // <-- Import Input
 
 // --- FIX: Import the new modal component ---
-import CaseDetailModal from "./case-detail-modal";
+import CaseDetailModal from "@/components/dashboard/case-detail-modal";
 import apiClient from "@/lib/api-client";
 
 interface Case {
@@ -38,6 +39,9 @@ export default function CaseList() {
 
   const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
+  // --- FIX: Add state for search term ---
+  const [searchTerm, setSearchTerm] = useState("");
+
   useEffect(() => {
     const loadData = async () => {
       try {
@@ -47,7 +51,8 @@ export default function CaseList() {
         const response = await apiClient.get<Case[]>("/cases/search", {
           params: {
             limit: 5,
-            // TODO: Add sorting by judgement date if backend supports it
+            // --- FIX: Pass search term to backend query param ---
+            accused_name: searchTerm || undefined,
           },
         });
         setData(response.data);
@@ -59,8 +64,13 @@ export default function CaseList() {
       }
     };
 
-    loadData();
-  }, []);
+    // --- FIX: Debounce search input ---
+    const timer = setTimeout(() => {
+      loadData();
+    }, 500); // Wait 500ms after user stops typing
+
+    return () => clearTimeout(timer); // Clear the timer if user types again
+  }, [searchTerm]); // Re-run effect when searchTerm changes
 
   if (error) {
     return (
@@ -80,10 +90,23 @@ export default function CaseList() {
       transition={{ duration: 0.5 }}
     >
       <Card className="dark:border-slate-700">
-        <div className="p-6 flex items-center justify-between">
+        <div className="p-6 flex flex-wrap items-center justify-between gap-4">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
             Recent Cases
           </h2>
+
+          {/* --- FIX: Add Search Bar --- */}
+          <div className="flex-grow sm:flex-grow-0 sm:w-64 relative">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+            <Input
+              placeholder="Search by accused name..."
+              className="pl-9"
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              disabled={loading}
+            />
+          </div>
+
           <Button variant="ghost" asChild>
             <Link href="/app/cases">
               View All <ArrowRight className="w-4 h-4 ml-2" />

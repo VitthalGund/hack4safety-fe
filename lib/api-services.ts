@@ -17,7 +17,8 @@ export interface TrendData {
 }
 export const fetchTrends = async (
   period: "monthly" | "yearly",
-  year: number | null // <-- FIX: Added year parameter
+  year: number | null,
+  month: number | null // <-- FIX: Added month parameter
 ): Promise<TrendData[]> => {
   // --- FIX: Pass params to the API call ---
   const response = await apiClient.get<TrendApiResponse[]>(
@@ -25,6 +26,7 @@ export const fetchTrends = async (
     {
       params: {
         year: year || undefined,
+        month: month || undefined, // <-- FIX: Pass month to API
       },
     }
   );
@@ -33,12 +35,16 @@ export const fetchTrends = async (
     throw new Error("Invalid data format received from server.");
   }
   const transformedData: TrendData[] = response.data.map((item) => {
-    const date = new Date(item.year, item.month - 1);
-
-    const dateString = date.toLocaleDateString("en-US", {
-      month: "short",
-      year: year ? undefined : "numeric",
-    });
+    let dateString: string;
+    if (period === "yearly" && !year) {
+      dateString = item.year.toString();
+    } else {
+      const date = new Date(item.year, item.month - 1);
+      dateString = date.toLocaleDateString("en-US", {
+        month: "short",
+        year: year ? undefined : "numeric",
+      });
+    }
 
     return {
       date: dateString,
@@ -347,101 +353,94 @@ export interface SankeyData {
   nodes: SankeyNode[];
   links: SankeyLink[];
 }
+
+// Interface for the ACTUAL API response you provided
 interface ChargesheetResponse {
-  nodes: SankeyNode[];
-  links: SankeyLink[];
+  summary: any; // We don't use this part
+  by_group: Array<{
+    _id: number; // 0 for Not Chargesheeted, 1 for Chargesheeted
+    total_convictions: number;
+    total_acquittals: number;
+    total_cases: number;
+  }>;
 }
+
 // 3. Implement the API service function
 export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
   const response = await apiClient.get<ChargesheetResponse>(
     "/analytics/chargesheet-comparison"
   );
 
-  // --- FIX: The backend now returns the correct format directly ---
-  // Just validate the response.
-  if (
-    !response.data ||
-    !Array.isArray(response.data.nodes) ||
-    !Array.isArray(response.data.links)
-  ) {
+  // --- FIX: Check the nested 'by_group' array ---
+  if (!response.data || !Array.isArray(response.data.by_group)) {
     console.error("Invalid data for chargesheet comparison:", response.data);
     throw new Error("Invalid data for chargesheet comparison.");
   }
 
-  return response.data;
+  const backendData = response.data.by_group;
+
+  // 4. Define nodes
+  const nodes: SankeyNode[] = [
+    { id: "Total Cases" },
+    { id: "Chargesheeted" },
+    { id: "Not Chargesheeted" },
+    { id: "Convicted" },
+    { id: "Acquitted" },
+  ];
+
+  // 5. Process backend data
+  // Find the data for "Chargesheeted" (_id: 1)
+  const cs_data = backendData.find((d) => d._id === 1) ?? {
+    total_convictions: 0,
+    total_acquittals: 0,
+  };
+  // Find the data for "Not Chargesheeted" (_id: 0)
+  const no_cs_data = backendData.find((d) => d._id === 0) ?? {
+    total_convictions: 0,
+    total_acquittals: 0,
+  };
+
+  const total_chargesheeted =
+    cs_data.total_convictions + cs_data.total_acquittals;
+  const total_not_chargesheeted =
+    no_cs_data.total_convictions + no_cs_data.total_acquittals;
+
+  // 6. Create links
+  const links: SankeyLink[] = [
+    {
+      source: "Total Cases",
+      target: "Chargesheeted",
+      value: total_chargesheeted,
+    },
+    {
+      source: "Total Cases",
+      target: "Not Chargesheeted",
+      value: total_not_chargesheeted,
+    },
+    {
+      source: "Chargesheeted",
+      target: "Convicted",
+      value: cs_data.total_convictions,
+    },
+    {
+      source: "Chargesheeted",
+      target: "Acquitted",
+      value: cs_data.total_acquittals,
+    },
+    {
+      source: "Not Chargesheeted",
+      target: "Convicted",
+      value: no_cs_data.total_convictions,
+    },
+    {
+      source: "Not Chargesheeted",
+      target: "Acquitted",
+      value: no_cs_data.total_acquittals,
+    },
+  ].filter((link) => link.value > 0);
+
+  return { nodes, links };
 };
-// export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
-//   const response = await apiClient.get<ChargesheetResponse[]>(
-//     "/analytics/chargesheet-comparison"
-//   );
-
-//   // --- FIX: Check the nested 'by_group' array ---
-//   if (!Array.isArray(response.data.by_group)) {
-//     throw new Error("Invalid data for chargesheet comparison.");
-//   }
-
-//   const backendData = response.data.by_group;
-
-//   // 4. Define nodes
-//   const nodes: SankeyNode[] = [
-//     { id: "Total Cases" },
-//     { id: "Chargesheeted" },
-//     { id: "Not Chargesheeted" },
-//     { id: "Convicted" },
-//     { id: "Acquitted" },
-//   ];
-
-//   // 5. Process backend data
-//   const cs_data = backendData.find((d) => d._id === 1) ?? {
-//     total_convictions: 0,
-//     total_acquittals: 0,
-//   };
-//   const no_cs_data = backendData.find((d) => d._id === 0) ?? {
-//     total_convictions: 0,
-//     total_acquittals: 0,
-//   };
-
-//   const total_chargesheeted =
-//     cs_data.total_convictions + cs_data.total_acquittals;
-//   const total_not_chargesheeted =
-//     no_cs_data.total_convictions + no_cs_data.total_acquittals;
-
-//   // 6. Create links
-//   const links: SankeyLink[] = [
-//     {
-//       source: "Total Cases",
-//       target: "Chargesheeted",
-//       value: total_chargesheeted,
-//     },
-//     {
-//       source: "Total Cases",
-//       target: "Not Chargesheeted",
-//       value: total_not_chargesheeted,
-//     },
-//     {
-//       source: "Chargesheeted",
-//       target: "Convicted",
-//       value: cs_data.total_convictions,
-//     },
-//     {
-//       source: "Chargesheeted",
-//       target: "Acquitted",
-//       value: cs_data.total_acquittals,
-//     },
-//     {
-//       source: "Not Chargesheeted",
-//       target: "Convicted",
-//       value: no_cs_data.total_convictions,
-//     },
-//     {
-//       source: "Not Chargesheeted",
-//       target: "Acquitted",
-//       value: no_cs_data.total_acquittals,
-//     },
-//   ].filter((link) => link.value > 0);
-
-//   return { nodes, links };
-// };
 
 export interface PersonnelScorecard {
   officer_name: string;
@@ -468,23 +467,4 @@ export const fetchPersonnelScorecard = async (
 export const fetchCaseDetails = async (caseId: string): Promise<Case> => {
   const response = await apiClient.get<Case>(`/cases/${caseId}`);
   return response.data;
-};
-
-export const fetchCaseSummary = async (caseData: Case): Promise<string> => {
-  // In a real app, this would be:
-  // const response = await apiClient.post("/insights/summarize-case", { case_id: caseData._id });
-  // return response.data.summary;
-
-  // As requested, we mock the LLM call to avoid RAG/QDRANT dependency.
-  await new Promise((resolve) => setTimeout(resolve, 500)); // Simulate AI delay
-
-  // Return formatted HTML as requested
-  return `
-    <p>This case (<strong>${caseData.case_number}</strong>) involves **${caseData.Accused_Name}** regarding **${caseData.Sections_of_Law}**.</p>
-    <ul class="list-disc pl-5 mt-2">
-      <li><strong>Judgement:</strong> The final judgement was <strong>${caseData.Result}</strong>.</li>
-      <li><strong>Investigating Officer:</strong> ${caseData.Investigating_Officer} (${caseData.Rank})</li>
-      <li><strong>Timeline:</strong> Registered on ${caseData.Date_of_Registration}, Chargesheet on ${caseData.Date_of_Chargesheet}, and Judgement on ${caseData.Date_of_Judgement}.</li>
-    </ul>
-  `;
 };
