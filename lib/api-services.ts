@@ -246,19 +246,25 @@ interface StationRankingResponse {
   conviction_rate: number;
 }
 export const fetchPerformanceRankings = async (
-  groupBy: "Investigating_Officer" | "Police_Station"
+  groupBy: "Investigating_Officer" | "Police_Station",
+  skip: number = 0,
+  limit: number = 5
 ): Promise<RankingData[]> => {
   const response = await apiClient.get<
     OfficerRankingResponse[] | StationRankingResponse[]
   >("/analytics/performance/ranking", {
-    params: { group_by: groupBy },
+    params: {
+      group_by: groupBy,
+      skip: skip,
+      limit: limit,
+    },
   });
   if (!Array.isArray(response.data)) {
     throw new Error("Invalid data format for rankings.");
   }
   if (groupBy === "Investigating_Officer") {
     return (response.data as OfficerRankingResponse[]).map((item, index) => ({
-      rank: index + 1,
+      rank: skip + index + 1,
       name: item.officer_name,
       unit: item.rank,
       convictionRate: item.conviction_rate * 100,
@@ -266,7 +272,7 @@ export const fetchPerformanceRankings = async (
     }));
   } else {
     return (response.data as StationRankingResponse[]).map((item, index) => ({
-      rank: index + 1,
+      rank: skip + index + 1,
       name: item.police_station,
       unit: "N/A",
       convictionRate: item.conviction_rate * 100,
@@ -468,3 +474,19 @@ export const fetchCaseDetails = async (caseId: string): Promise<Case> => {
   const response = await apiClient.get<Case>(`/cases/${caseId}`);
   return response.data;
 };
+
+export async function getAdminStats() {
+  return apiService.getAdminStats();
+}
+
+export async function getAdminUsers() {
+  return apiService.getAdminUsers();
+}
+
+export async function askLegalBot(query: string, model: string = "gemini") {
+  return apiClient.post("/rag/legal", { query, model_provider: model });
+}
+
+export async function askCaseBot(query: string, model: string = "gemini") {
+  return apiClient.post("/rag/cases", { query, model_provider: model });
+}
