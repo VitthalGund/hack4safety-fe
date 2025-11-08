@@ -1,6 +1,6 @@
 import { create } from "zustand";
 import { persist, createJSONStorage } from "zustand/middleware";
-import type { User } from "@/types/user";
+import { User } from "@/types/user";
 
 export enum UserRole {
   ADMIN = "ADMIN",
@@ -10,32 +10,53 @@ export enum UserRole {
   COURT_LIAISON = "COURT_LIAISON",
 }
 
-type AuthState = {
-  token: string | null;
-  user: User | null;
+interface AuthStore {
   isAuthenticated: boolean;
-  setToken: (token: string) => void;
-  setUser: (user: User) => void;
+  user: User | null;
+  accessToken: string | null;
+  refreshToken: string | null;
+  login: (data: {
+    user: User;
+    accessToken: string;
+    refreshToken: string;
+  }) => void;
+  setTokens: (tokens: { accessToken: string; refreshToken: string }) => void;
   logout: () => void;
-};
+}
 
-export const useAuthStore = create(
-  persist<AuthState>(
+export const useAuthStore = create<AuthStore>()(
+  persist(
     (set) => ({
-      token: null,
-      user: null,
       isAuthenticated: false,
-      setToken: (token) => {
-        set({ token, isAuthenticated: true });
+      user: null,
+      accessToken: null,
+      refreshToken: null,
+      login: (data) => {
+        set({
+          isAuthenticated: true,
+          user: data.user,
+          accessToken: data.accessToken,
+          refreshToken: data.refreshToken,
+        });
       },
-      setUser: (user) => set({ user }),
+      setTokens: (tokens) => {
+        set({
+          accessToken: tokens.accessToken,
+          refreshToken: tokens.refreshToken,
+        });
+      },
       logout: () => {
-        set({ token: null, user: null, isAuthenticated: false });
+        set({
+          isAuthenticated: false,
+          user: null,
+          accessToken: null,
+          refreshToken: null,
+        });
       },
     }),
     {
-      name: "auth-storage", // This is the key that will be used in localStorage
-      storage: createJSONStorage(() => localStorage), // Use localStorage
+      name: "auth-storage",
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );

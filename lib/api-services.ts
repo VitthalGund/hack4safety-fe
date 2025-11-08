@@ -136,6 +136,40 @@ export interface PersonnelScorecard {
 
 /*
   --------------------
+  Auth API Functions (Using RAW Client)
+  --------------------
+*/
+
+/**
+ * Logs in the user.
+ * Uses the raw authApiClient.
+ */
+export const loginUser = (username: string, password: string) => {
+  const formData = new URLSearchParams();
+  formData.append("username", username);
+  formData.append("password", password);
+
+  return apiClient.post("/auth/token", formData, {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
+};
+
+/**
+ * Refreshes the access token.
+ * Uses the raw authApiClient.
+ */
+export const refreshAccessToken = (refreshToken: string) => {
+  return apiClient.post(
+    "/auth/refresh",
+    {},
+    {
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    }
+  );
+};
+
+/*
+  --------------------
   apiService (collection of endpoints)
   --------------------
 */
