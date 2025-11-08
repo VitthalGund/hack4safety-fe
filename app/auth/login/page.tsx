@@ -191,40 +191,21 @@ export default function LoginPage() {
               >
                 <Button
                   type="submit"
-                  disabled={isLoading || !username || !password}
+                  // disabled={isLoading || !username || !password}
                   // --- FIX: Added disabled:opacity-50 and disabled:cursor-not-allowed ---
                   className="w-full h-11 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    <div className="flex flex-row items-center justify-center">
+                      <Loader2 className="mr-2 h-5 w-4 animate-spin" />
                       Signing in...
-                    </>
+                    </div>
                   ) : (
                     "Sign In"
                   )}
                 </Button>
               </motion.div>
             </form>
-
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              transition={{ delay: 0.5 }}
-              className="mt-8 p-4 bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 rounded-lg"
-            >
-              <p className="text-xs font-medium text-blue-900 dark:text-blue-200 mb-2">
-                Demo Credentials:
-              </p>
-              <div className="space-y-1 text-xs text-blue-800 dark:text-blue-300">
-                <p>
-                  <strong>Username:</strong> admin_user
-                </p>
-                <p>
-                  <strong>Password:</strong> admin_password123
-                </p>
-              </div>
-            </motion.div>
 
             <motion.div
               initial={{ opacity: 0 }}

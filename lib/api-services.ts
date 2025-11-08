@@ -1,4 +1,57 @@
-import apiClient from "@/lib/api-client";
+import apiClient from "./api-client";
+
+// Define the shape of the data coming from the BACKEND
+interface TrendApiResponse {
+  year: number;
+  month: number;
+  total_convictions: number;
+  total_acquittals: number;
+  total_cases: number;
+}
+
+// Define the shape the FRONTEND CHART expects
+export interface TrendData {
+  date: string; // e.g., "Jan 2024"
+  Convicted: number;
+  Acquitted: number;
+  "Total Cases": number;
+}
+
+/**
+ * Fetches trends data from the backend and transforms it for the chart.
+ */
+export const fetchTrends = async (
+  period: "monthly" | "yearly"
+): Promise<TrendData[]> => {
+  // TODO: The backend /analytics/trends endpoint doesn't currently use the 'period' param.
+  // We will ignore it for now, but in a real app, you would pass this to the API.
+  // Example: const response = await apiClient.get("/analytics/trends", { params: { period } });
+
+  const response = await apiClient.get<TrendApiResponse[]>("/analytics/trends");
+
+  if (!Array.isArray(response.data)) {
+    throw new Error("Invalid data format received from server.");
+  }
+
+  // --- FIX: Transform backend data into the shape the chart expects ---
+  const transformedData: TrendData[] = response.data.map((item) => {
+    // Create a date string. JS months are 0-indexed, so -1.
+    const date = new Date(item.year, item.month - 1);
+    const dateString = date.toLocaleDateString("en-US", {
+      month: "short",
+      year: "numeric",
+    });
+
+    return {
+      date: dateString,
+      Convicted: item.total_convictions,
+      Acquitted: item.total_acquittals,
+      "Total Cases": item.total_cases,
+    };
+  });
+
+  return transformedData;
+};
 
 export const apiService = {
   // Analytics KPIs
@@ -139,13 +192,6 @@ export async function fetchConvictionRate(
   filters?: Record<string, string>
 ) {
   return apiService.fetchConvictionRate(groupBy, filters);
-}
-
-export async function fetchTrends(
-  period: "monthly" | "yearly",
-  natureOfOffence?: string
-) {
-  return apiService.fetchTrends(period, natureOfOffence);
 }
 
 export async function fetchPerformanceRanking(
