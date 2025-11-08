@@ -1,41 +1,43 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Search, Network, MapPin, ShieldAlert } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Input } from "@/components/ui/input"
-import { Button } from "@/components/ui/button"
-import { apiService } from "@/lib/api-services"
-import useSWR from "swr"
+import { useState } from "react";
+import { motion } from "framer-motion";
+import { Search, Network, MapPin, ShieldAlert } from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Input } from "@/components/ui/input";
+import { Button } from "@/components/ui/button";
+import { apiService } from "@/lib/api-services";
+import useSWR from "swr";
 
 interface Accused {
-  id: string
-  name: string
-  age: number
-  gender: string
-  criminal_history: number
-  connected_cases: number
-  status: string
+  id: string;
+  name: string;
+  age: number;
+  gender: string;
+  criminal_history: number;
+  connected_cases: number;
+  status: string;
 }
 
 export default function AccusedPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedAccused, setSelectedAccused] = useState<Accused | null>(null)
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedAccused, setSelectedAccused] = useState<Accused | null>(null);
 
   const { data: accusedData, isLoading } = useSWR(
     "/api/accused/search",
     () => apiService.searchAccused({ query: searchTerm, limit: 50 }),
-    { revalidateOnFocus: false },
-  )
+    { revalidateOnFocus: false }
+  );
 
-  const accused = accusedData?.data || []
+  const accused = accusedData?.data || [];
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 p-3">
       <div className="space-y-4">
         <h1 className="text-3xl font-bold text-foreground">Accused 360°</h1>
-        <p className="text-muted-foreground">Search and analyze accused individuals</p>
+        <p className="text-muted-foreground">
+          Search and analyze accused individuals
+        </p>
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
@@ -62,15 +64,24 @@ export default function AccusedPage() {
         {/* List and Detail */}
         <div className="lg:col-span-2 space-y-6">
           {selectedAccused ? (
-            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-              <AccusedProfileView accused={selectedAccused} onBack={() => setSelectedAccused(null)} />
+            <motion.div
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+            >
+              <AccusedProfileView
+                accused={selectedAccused}
+                onBack={() => setSelectedAccused(null)}
+              />
             </motion.div>
           ) : (
             <div className="space-y-3 max-h-[600px] overflow-y-auto">
               {isLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3].map((i) => (
-                    <div key={i} className="h-20 bg-muted rounded-lg animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-20 bg-muted rounded-lg animate-pulse"
+                    />
                   ))}
                 </div>
               ) : accused.length === 0 ? (
@@ -93,12 +104,16 @@ export default function AccusedPage() {
                       <CardContent className="p-4">
                         <div className="flex justify-between items-start">
                           <div className="flex-1">
-                            <h3 className="font-semibold text-foreground">{person.name}</h3>
+                            <h3 className="font-semibold text-foreground">
+                              {person.name}
+                            </h3>
                             <p className="text-sm text-muted-foreground mt-1">
                               Age: {person.age} • Gender: {person.gender}
                             </p>
                             <div className="flex gap-4 mt-2 text-sm text-muted-foreground">
-                              <span>Criminal records: {person.criminal_history}</span>
+                              <span>
+                                Criminal records: {person.criminal_history}
+                              </span>
                               <span>Cases: {person.connected_cases}</span>
                             </div>
                           </div>
@@ -118,34 +133,38 @@ export default function AccusedPage() {
         </div>
       </div>
     </div>
-  )
+  );
 }
 
 function AccusedProfileView({
   accused,
   onBack,
 }: {
-  accused: Accused
-  onBack: () => void
+  accused: Accused;
+  onBack: () => void;
 }) {
   const { data: profileData, isLoading } = useSWR(
     `/api/accused/${accused.id}/profile`,
     () => apiService.getAccusedProfile(accused.id),
-    { revalidateOnFocus: false },
-  )
+    { revalidateOnFocus: false }
+  );
 
   const { data: networkData } = useSWR(
     `/api/accused/${accused.id}/network`,
     () => apiService.getAccusedNetwork(accused.id),
-    { revalidateOnFocus: false },
-  )
+    { revalidateOnFocus: false }
+  );
 
-  const profile = profileData?.data || accused
-  const network = networkData?.data || { nodes: [], edges: [] }
+  const profile = profileData?.data || accused;
+  const network = networkData?.data || { nodes: [], edges: [] };
 
   return (
     <div className="space-y-6">
-      <Button variant="ghost" onClick={onBack} className="mb-4 text-muted-foreground hover:text-foreground">
+      <Button
+        variant="ghost"
+        onClick={onBack}
+        className="mb-4 text-muted-foreground hover:text-foreground"
+      >
         Back to Search
       </Button>
 
@@ -154,7 +173,9 @@ function AccusedProfileView({
         <CardHeader>
           <div className="flex justify-between items-start">
             <div>
-              <CardTitle className="text-2xl text-foreground">{profile.name}</CardTitle>
+              <CardTitle className="text-2xl text-foreground">
+                {profile.name}
+              </CardTitle>
               <p className="text-muted-foreground mt-1">
                 Age {profile.age} • {profile.gender}
               </p>
@@ -167,12 +188,20 @@ function AccusedProfileView({
         <CardContent className="pt-0">
           <div className="grid grid-cols-2 gap-6">
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Criminal History</label>
-              <p className="text-2xl font-bold text-foreground mt-1">{profile.criminal_history}</p>
+              <label className="text-sm font-medium text-muted-foreground">
+                Criminal History
+              </label>
+              <p className="text-2xl font-bold text-foreground mt-1">
+                {profile.criminal_history}
+              </p>
             </div>
             <div>
-              <label className="text-sm font-medium text-muted-foreground">Connected Cases</label>
-              <p className="text-2xl font-bold text-foreground mt-1">{profile.connected_cases}</p>
+              <label className="text-sm font-medium text-muted-foreground">
+                Connected Cases
+              </label>
+              <p className="text-2xl font-bold text-foreground mt-1">
+                {profile.connected_cases}
+              </p>
             </div>
           </div>
         </CardContent>
@@ -191,7 +220,9 @@ function AccusedProfileView({
             <div className="h-64 bg-muted rounded-lg animate-pulse" />
           ) : (
             <div className="h-64 bg-muted/30 dark:bg-muted/20 rounded-lg flex items-center justify-center border border-border">
-              <p className="text-muted-foreground">Network visualization loading...</p>
+              <p className="text-muted-foreground">
+                Network visualization loading...
+              </p>
             </div>
           )}
         </CardContent>
@@ -212,7 +243,10 @@ function AccusedProfileView({
               { place: "Bandra", cases: 2 },
               { place: "Dadar", cases: 1 },
             ].map((location, idx) => (
-              <div key={idx} className="flex justify-between items-center p-3 bg-muted/50 dark:bg-muted/30 rounded-lg">
+              <div
+                key={idx}
+                className="flex justify-between items-center p-3 bg-muted/50 dark:bg-muted/30 rounded-lg"
+              >
                 <span className="text-foreground">{location.place}</span>
                 <span className="px-2 py-1 bg-primary/10 text-primary rounded text-xs dark:bg-primary/20">
                   {location.cases} cases
@@ -223,5 +257,5 @@ function AccusedProfileView({
         </CardContent>
       </Card>
     </div>
-  )
+  );
 }
