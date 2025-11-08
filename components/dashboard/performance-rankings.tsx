@@ -15,16 +15,28 @@ import { fetchPerformanceRankings, RankingData } from "@/lib/api-services";
 import {
   AlertCircle,
   Loader2,
-  Users, // <-- 1. Import icons
+  Users,
   Building,
   ChevronLeft,
   ChevronRight,
+  Shield, // <-- Added icon for Units
 } from "lucide-react";
 import PersonnelScorecardModal from "@/components/dashboard/personnel-scorecard-modal";
-import { Button } from "@/components/ui/button"; // <-- 2. Import Button
+import { Button } from "@/components/ui/button";
 
-type GroupBy = "Investigating_Officer" | "Police_Station";
-const PAGE_LIMIT = 5; // <-- 3. Define page size
+// --- 1. Add "Term_Unit" to type ---
+type GroupBy = "Investigating_Officer" | "Police_Station" | "Term_Unit";
+const PAGE_LIMIT = 5;
+
+// --- 2. Add helper map for display ---
+const groupByOptions: Record<
+  GroupBy,
+  { label: string; icon: React.ElementType }
+> = {
+  Investigating_Officer: { label: "IO", icon: Users },
+  Police_Station: { label: "Police Station", icon: Building },
+  Term_Unit: { label: "Unit", icon: Shield },
+};
 
 export default function PerformanceRankings() {
   const [data, setData] = useState<RankingData[]>([]);
@@ -33,8 +45,6 @@ export default function PerformanceRankings() {
   const [groupBy, setGroupBy] = useState<GroupBy>("Investigating_Officer");
 
   const [selectedOfficer, setSelectedOfficer] = useState<string | null>(null);
-
-  // --- 4. Add state for pagination ---
   const [skip, setSkip] = useState(0);
 
   useEffect(() => {
@@ -42,7 +52,6 @@ export default function PerformanceRankings() {
       try {
         setLoading(true);
         setError(null);
-        // --- 5. Pass pagination state to API call ---
         const result = await fetchPerformanceRankings(
           groupBy,
           skip,
@@ -58,11 +67,9 @@ export default function PerformanceRankings() {
     };
 
     loadData();
-  }, [groupBy, skip]); // --- 6. Re-run effect when skip changes ---
+  }, [groupBy, skip]);
 
-  // --- 7. Add pagination handler functions ---
   const handleNext = () => {
-    // Only allow next if we received a full page of results
     if (data.length === PAGE_LIMIT) {
       setSkip(skip + PAGE_LIMIT);
     }
@@ -97,24 +104,27 @@ export default function PerformanceRankings() {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
             Top Performers
           </h2>
-          {/* --- 8. Use new Button component --- */}
+          {/* --- 3. Use Button component and map --- */}
           <div className="flex gap-2">
-            {(["Investigating_Officer", "Police_Station"] as const).map(
-              (opt) => (
-                <button
+            {(Object.keys(groupByOptions) as GroupBy[]).map((opt) => {
+              const Icon = groupByOptions[opt].icon;
+              return (
+                <Button
                   key={opt}
-                  onClick={() => setGroupBy(opt)}
+                  variant={groupBy === opt ? "primary" : "secondary"}
+                  size="sm"
+                  onClick={() => {
+                    setGroupBy(opt);
+                    setSkip(0); // Reset pagination on filter change
+                  }}
                   disabled={loading}
-                  className={`px-4 py-2 rounded-lg transition-colors text-sm ${
-                    groupBy === opt
-                      ? "bg-indigo-600 text-white dark:bg-indigo-500"
-                      : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
-                  }`}
+                  className="flex gap-2"
                 >
-                  {opt.replace("_", " ")}
-                </button>
-              )
-            )}
+                  <Icon className="w-4 h-4" />
+                  {groupByOptions[opt].label}
+                </Button>
+              );
+            })}
           </div>
         </div>
 
@@ -138,6 +148,7 @@ export default function PerformanceRankings() {
                 {chartData.map((item) => (
                   <TableRow
                     key={item.name}
+                    // --- 4. Ensure only officer rows are clickable ---
                     className={
                       isOfficer
                         ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
@@ -161,7 +172,6 @@ export default function PerformanceRankings() {
               </TableBody>
             </Table>
 
-            {/* --- 10. Add Pagination Controls --- */}
             <div className="p-4 flex items-center justify-end gap-2 border-t dark:border-slate-700">
               <Button
                 variant="outline"

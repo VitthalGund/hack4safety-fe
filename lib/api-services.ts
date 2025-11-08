@@ -1,16 +1,55 @@
+// lib/api-services.ts
+
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import apiClient from "./api-client";
 import type { Case } from "@/types/case";
 import { User } from "@/types/user";
 import { UserRole } from "./permissions";
+import axios from "axios";
 
 /*
   --------------------
-  Types (merged / preferred)
+  RAW Auth Client
+  --------------------
+*/
+const API_BASE_URL =
+  process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000/api/v1";
+
+const authApiClient = axios.create({
+  baseURL: API_BASE_URL,
+});
+
+/*
+  --------------------
+  Auth API Functions (Using RAW Client)
+  --------------------
+*/
+export const loginUser = (username: string, password: string) => {
+  const formData = new URLSearchParams();
+  formData.append("username", username);
+  formData.append("password", password);
+
+  return authApiClient.post("/auth/token", formData, {
+    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+  });
+};
+
+export const refreshAccessToken = (refreshToken: string) => {
+  return authApiClient.post(
+    "/auth/refresh",
+    {},
+    {
+      headers: { Authorization: `Bearer ${refreshToken}` },
+    }
+  );
+};
+
+/*
+  --------------------
+  Types
   --------------------
 */
 
-/** Case filter params (extended from code2) */
 export type CaseFilterParams = {
   district?: string;
   police_station?: string;
@@ -24,7 +63,6 @@ export type CaseFilterParams = {
   judge_name?: string;
 };
 
-/** Metadata fields shape returned for dropdowns (from code2) */
 export type MetadataFields = {
   District: string[];
   Police_Station: string[];
@@ -36,11 +74,10 @@ export type MetadataFields = {
   Sections_of_Law: string[];
   PP_Name: string[];
   Judge_Name: string[];
+  Gender: string[];
+  Age_Group: string[];
+  Term_Unit: string[];
 };
-
-/* --------------------
-   Analytics-related types (from code1)
-   -------------------- */
 
 interface TrendApiResponse {
   year: number;
@@ -51,7 +88,7 @@ interface TrendApiResponse {
 }
 export interface TrendData {
   date: string;
-  Convicted: number;
+  Convicted: number; // "Convicted" is the key used by the chart
   Acquitted: number;
   "Total Cases": number;
 }
@@ -75,16 +112,30 @@ interface StationRankingResponse {
   total_cases: number;
   conviction_rate: number;
 }
+// --- FEATURE: Added Unit response type ---
+interface UnitRankingResponse {
+  unit_name: string;
+  total_cases: number;
+  conviction_rate: number;
+}
+// --- FEATURE: Added Acquittal chart type ---
+export interface AcquittalChartData {
+  name: string;
+  AcquittalRate: number;
+}
 
 export interface ConvictionChartData {
   name: string;
   ConvictionRate: number;
 }
 
-interface ConvictionRateResponse {
+interface RateResponse {
   [key: string]: any;
   total_cases: number;
+  total_convictions: number;
+  total_acquittals: number;
   conviction_rate: number;
+  acquittal_rate: number;
 }
 
 export interface KPIData {
@@ -136,43 +187,10 @@ export interface PersonnelScorecard {
 
 /*
   --------------------
-  Auth API Functions (Using RAW Client)
-  --------------------
-*/
-
-/**
- * Logs in the user.
- * Uses the raw authApiClient.
- */
-export const loginUser = (username: string, password: string) => {
-  const formData = new URLSearchParams();
-  formData.append("username", username);
-  formData.append("password", password);
-
-  return apiClient.post("/auth/token", formData, {
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-  });
-};
-
-/**
- * Refreshes the access token.
- * Uses the raw authApiClient.
- */
-export const refreshAccessToken = (refreshToken: string) => {
-  return apiClient.post(
-    "/auth/refresh",
-    {},
-    {
-      headers: { Authorization: `Bearer ${refreshToken}` },
-    }
-  );
-};
-
-/*
-  --------------------
   apiService (collection of endpoints)
   --------------------
 */
+// This object seems fine, no changes needed.
 export const apiService = {
   // Analytics KPIs
   async fetchKPIDurations() {
@@ -305,7 +323,7 @@ export const apiService = {
 
 /*
   --------------------
-  High-level helpers exported (from code1)
+  High-level helpers exported
   --------------------
 */
 export async function fetchKPIDurations() {
@@ -350,23 +368,22 @@ export async function fetchInsights() {
 
 /*
   --------------------
-  Trends fetching (detailed transformer) -- merged from code1 (keeps month param)
+  Trends fetching (detailed transformer)
   --------------------
 */
 export const fetchTrends = async (
-  period: "monthly" | "yearly",
+  // --- FEATURE: Added year and month ---
   year: number | null,
-  month: number | null
+  month: number | null,
+  crimeType?: string | null
 ): Promise<TrendData[]> => {
+  const params = new URLSearchParams();
+  if (year) params.append("year", year.toString());
+  if (month) params.append("month", month.toString());
+  if (crimeType) params.append("crime_type", crimeType);
+
   const response = await apiClient.get<TrendApiResponse[]>(
-    "/analytics/trends",
-    {
-      params: {
-        year: year ?? undefined,
-        month: month ?? undefined,
-        period,
-      },
-    }
+    `/analytics/trends?${params.toString()}`
   );
 
   if (!Array.isArray(response.data)) {
@@ -374,16 +391,12 @@ export const fetchTrends = async (
   }
 
   const transformedData: TrendData[] = response.data.map((item) => {
-    let dateString: string;
-    if (period === "yearly" && !year) {
-      dateString = item.year.toString();
-    } else {
-      const date = new Date(item.year, (item.month ?? 1) - 1);
-      dateString = date.toLocaleDateString("en-US", {
-        month: "short",
-        year: year ? undefined : "numeric",
-      });
-    }
+    // Format date as "MMM 'YY" (e.g., "Jan '23")
+    const date = new Date(item.year, (item.month ?? 1) - 1);
+    const dateString = date.toLocaleDateString("en-US", {
+      month: "short",
+      year: "2-digit",
+    });
 
     return {
       date: dateString,
@@ -397,16 +410,17 @@ export const fetchTrends = async (
 
 /*
   --------------------
-  Performance ranking helper (from code1)
+  Performance ranking helper
   --------------------
 */
+// --- FEATURE: Updated type and logic for Term_Unit ---
 export const fetchPerformanceRankings = async (
-  groupBy: "Investigating_Officer" | "Police_Station",
+  groupBy: "Investigating_Officer" | "Police_Station" | "Term_Unit",
   skip: number = 0,
   limit: number = 5
 ): Promise<RankingData[]> => {
   const response = await apiClient.get<
-    OfficerRankingResponse[] | StationRankingResponse[]
+    (OfficerRankingResponse | StationRankingResponse | UnitRankingResponse)[]
   >("/analytics/performance/ranking", {
     params: {
       group_by: groupBy,
@@ -414,9 +428,12 @@ export const fetchPerformanceRankings = async (
       limit: limit,
     },
   });
+
   if (!Array.isArray(response.data)) {
     throw new Error("Invalid data format for rankings.");
   }
+
+  // Use a type guard or property check
   if (groupBy === "Investigating_Officer") {
     return (response.data as OfficerRankingResponse[]).map((item, index) => ({
       rank: skip + index + 1,
@@ -425,11 +442,20 @@ export const fetchPerformanceRankings = async (
       convictionRate: item.conviction_rate * 100,
       totalCases: item.total_cases,
     }));
-  } else {
+  } else if (groupBy === "Police_Station") {
     return (response.data as StationRankingResponse[]).map((item, index) => ({
       rank: skip + index + 1,
       name: item.police_station,
       unit: "N/A",
+      convictionRate: item.conviction_rate * 100,
+      totalCases: item.total_cases,
+    }));
+  } else {
+    // --- FIX: Handle Term_Unit mapping ---
+    return (response.data as UnitRankingResponse[]).map((item, index) => ({
+      rank: skip + index + 1,
+      name: item.unit_name, // This field comes from the backend
+      unit: "Unit",
       convictionRate: item.conviction_rate * 100,
       totalCases: item.total_cases,
     }));
@@ -438,13 +464,15 @@ export const fetchPerformanceRankings = async (
 
 /*
   --------------------
-  Conviction Rate & KPI helpers (from code1)
+  Rate & KPI helpers
   --------------------
 */
+const COMMON_GROUP_BY = "District";
+
 export const fetchConvictionRate = async (
-  groupBy: "District" | "Court_Name" | "Crime_Type"
+  groupBy: string
 ): Promise<ConvictionChartData[]> => {
-  const response = await apiClient.get<ConvictionRateResponse[]>(
+  const response = await apiClient.get<RateResponse[]>(
     "/analytics/conviction-rate",
     {
       params: { group_by: groupBy },
@@ -453,18 +481,36 @@ export const fetchConvictionRate = async (
   if (!Array.isArray(response.data)) {
     throw new Error("Invalid data format for conviction rate.");
   }
-  const transformedData: ConvictionChartData[] = response.data.map((item) => ({
-    name: item[groupBy],
+  return response.data.map((item) => ({
+    name: item[groupBy] || "Uncategorized",
     ConvictionRate: parseFloat((item.conviction_rate * 100).toFixed(1)),
   }));
-  return transformedData;
+};
+
+// --- FEATURE: Added Acquittal Rate function ---
+export const fetchAcquittalRate = async (
+  groupBy: string
+): Promise<AcquittalChartData[]> => {
+  const response = await apiClient.get<RateResponse[]>(
+    "/analytics/acquittal-rate",
+    {
+      params: { group_by: groupBy },
+    }
+  );
+  if (!Array.isArray(response.data)) {
+    throw new Error("Invalid data format for acquittal rate.");
+  }
+  return response.data.map((item) => ({
+    name: item[groupBy] || "Uncategorized",
+    AcquittalRate: parseFloat((item.acquittal_rate * 100).toFixed(1)),
+  }));
 };
 
 export const fetchKPIs = async (): Promise<KPIData> => {
   const [durationsRes, convictionRateRes] = await Promise.all([
     apiClient.get<DurationsResponse>("/analytics/kpi/durations"),
-    apiClient.get<ConvictionRateResponse[]>("/analytics/conviction-rate", {
-      params: { group_by: "District" },
+    apiClient.get<RateResponse[]>("/analytics/conviction-rate", {
+      params: { group_by: COMMON_GROUP_BY },
     }),
   ]);
   const durationsData = durationsRes.data;
@@ -477,29 +523,27 @@ export const fetchKPIs = async (): Promise<KPIData> => {
   );
   return {
     totalCases: totalCases,
-    avgLifecycleDays: durationsData.avg_lifecycle_days,
-    avgInvestigationDays: durationsData.avg_investigation_days,
-    avgTrialDays: durationsData.avg_trial_days,
+    avgLifecycleDays: Math.round(durationsData.avg_lifecycle_days || 0),
+    avgInvestigationDays: Math.round(durationsData.avg_investigation_days || 0),
+    avgTrialDays: Math.round(durationsData.avg_trial_days || 0),
   };
 };
 
 /*
   --------------------
-  Chargesheet Sankey (from code1)
+  Chargesheet Sankey
   --------------------
 */
 export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
   const response = await apiClient.get<ChargesheetResponse>(
     "/analytics/chargesheet-comparison"
   );
-
+  // ... (this logic is complex but correct, no changes needed) ...
   if (!response.data || !Array.isArray(response.data.by_group)) {
     console.error("Invalid data for chargesheet comparison:", response.data);
     throw new Error("Invalid data for chargesheet comparison.");
   }
-
   const backendData = response.data.by_group;
-
   const nodes: SankeyNode[] = [
     { id: "Total Cases" },
     { id: "Chargesheeted" },
@@ -507,7 +551,6 @@ export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
     { id: "Convicted" },
     { id: "Acquitted" },
   ];
-
   const cs_data = backendData.find((d) => d._id === 1) ?? {
     total_convictions: 0,
     total_acquittals: 0,
@@ -516,12 +559,10 @@ export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
     total_convictions: 0,
     total_acquittals: 0,
   };
-
   const total_chargesheeted =
     cs_data.total_convictions + cs_data.total_acquittals;
   const total_not_chargesheeted =
     no_cs_data.total_convictions + no_cs_data.total_acquittals;
-
   const links: SankeyLink[] = [
     {
       source: "Total Cases",
@@ -554,22 +595,10 @@ export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
       value: no_cs_data.total_acquittals,
     },
   ].filter((link) => link.value > 0);
-
   return { nodes, links };
 };
 
-export interface PersonnelScorecard {
-  officer_name: string;
-  rank: string;
-  total_cases: number;
-  total_convictions: number;
-  total_acquittals: number;
-  conviction_rate: number;
-  avg_investigation_duration_days: number;
-  common_acquittal_reasons: string[];
-  recent_cases: Array<{ id: string; Case_Number: string; Result: string }>;
-}
-
+// ... (fetchPersonnelScorecard, fetchCaseDetails, admin, RAG functions are fine) ...
 export const fetchPersonnelScorecard = async (
   name: string
 ): Promise<PersonnelScorecard> => {
@@ -602,13 +631,19 @@ export async function askCaseBot(query: string, model: string = "gemini") {
 
 /*
   --------------------
-  React Query hooks (unified)
+  React Query hooks
   --------------------
 */
-export const useGetCases = (q: string, filters: CaseFilterParams) => {
+// --- FIX: Added skip and limit to useGetCases ---
+export const useGetCases = (
+  q: string,
+  filters: CaseFilterParams,
+  skip: number,
+  limit: number
+) => {
   return useQuery<Case[], Error>({
-    queryKey: ["cases", q, filters],
-    queryFn: () => getCases(q, filters),
+    queryKey: ["cases", q, filters, skip, limit],
+    queryFn: () => getCases(q, filters, skip, limit),
   });
 };
 
@@ -621,54 +656,32 @@ export const useGetMetadataFields = () => {
   });
 };
 
-// --- User/Admin API Functions (NEW) ---
-
-/**
- * Fetches all users for the admin panel.
- */
+// ... (User/Admin hooks are fine) ...
 const getUsers = async (): Promise<User[]> => {
   const { data } = await apiClient.get("/admin/users");
   return data;
 };
-
-/**
- * Creates a new user.
- */
 const createUser = async (userData: UserCreateData): Promise<User> => {
   const { data } = await apiClient.post("/admin/users", userData);
   return data;
 };
-
-/**
- * A hook to fetch all users for the admin panel.
- */
 export const useGetUsers = () => {
   return useQuery<User[], Error>({
     queryKey: ["users"],
     queryFn: getUsers,
   });
 };
-
-/**
- * A hook to create a new user.
- * It invalidates the 'users' query on success to refetch the list.
- */
 export const useCreateUser = () => {
   const queryClient = useQueryClient();
   return useMutation<User, Error, UserCreateData>({
     mutationFn: createUser,
     onSuccess: () => {
-      // When a user is created, invalidate the 'users' query to refetch
       queryClient.invalidateQueries({ queryKey: ["users"] });
     },
   });
 };
 
-/*
-  --------------------
-  Accused 360 (prefer code2 implementation hitting real endpoints)
-  --------------------
-*/
+// ... (Accused 360 hooks are fine) ...
 export type AccusedSearchResult = {
   id: string;
   name: string;
@@ -719,7 +732,7 @@ export type UserCreateData = {
   police_station?: string;
 };
 
-// --- NEW: Types for Analytics ---
+// --- Analytics Types & Functions ---
 
 export type KpiData = {
   avg_investigation_days: number;
@@ -728,7 +741,7 @@ export type KpiData = {
 };
 
 export type ConvictionRateData = {
-  [key: string]: any; // e.g., "District": "Cuttack"
+  [key: string]: any;
   total_convictions: number;
   total_acquittals: number;
   total_cases: number;
@@ -744,14 +757,15 @@ export type TrendsData = {
 };
 
 export type TrendsFilterParams = {
-  crime_type?: string;
-  gender?: string;
-  age_group?: string;
+  crime_type?: string | null;
+  year?: number | null;
+  month?: number | null;
 };
 
 export type PerformanceData = {
   officer_name?: string;
   police_station?: string;
+  unit_name?: string;
   rank?: string;
   total_convictions: number;
   total_acquittals: number;
@@ -760,15 +774,19 @@ export type PerformanceData = {
 };
 
 // --- API Functions ---
-
 const getCases = async (
   q: string,
-  filters: CaseFilterParams
+  filters: CaseFilterParams,
+  // --- FIX: Added skip and limit ---
+  skip: number = 0,
+  limit: number = 5
 ): Promise<Case[]> => {
   const params = new URLSearchParams();
-  if (q) {
-    params.append("q", q);
-  }
+  if (q) params.append("q", q);
+
+  params.append("skip", skip.toString());
+  params.append("limit", limit.toString());
+
   (Object.keys(filters) as Array<keyof CaseFilterParams>).forEach((key) => {
     const value = filters[key];
     if (value) {
@@ -801,9 +819,9 @@ const getMetadataFields = async (): Promise<MetadataFields> => {
     Sections_of_Law,
     PP_Name,
     Judge_Name,
-    // --- NEW: Fetching new filter data ---
     Gender,
     Age_Group,
+    Term_Unit,
   ] = await Promise.all([
     fetchField("District"),
     fetchField("Police_Station"),
@@ -815,6 +833,9 @@ const getMetadataFields = async (): Promise<MetadataFields> => {
     fetchField("Sections_of_Law"),
     fetchField("PP_Name"),
     fetchField("Judge_Name"),
+    fetchField("Gender"),
+    fetchField("Age_Group"),
+    fetchField("Term_Unit"),
   ]);
 
   return {
@@ -830,10 +851,10 @@ const getMetadataFields = async (): Promise<MetadataFields> => {
     Judge_Name,
     Gender,
     Age_Group,
+    Term_Unit,
   };
 };
 
-// --- NEW: Analytics API Functions ---
 const getKpis = async (): Promise<KpiData> => {
   const { data } = await apiClient.get("/analytics/kpi/durations");
   return data;
@@ -848,15 +869,31 @@ const getConvictionRate = async (
   return data;
 };
 
+// --- FIX: Updated getTrends function ---
 const getTrends = async (
   filters: TrendsFilterParams
 ): Promise<TrendsData[]> => {
   const params = new URLSearchParams();
   if (filters.crime_type) params.append("crime_type", filters.crime_type);
-  if (filters.gender) params.append("gender", filters.gender);
-  if (filters.age_group) params.append("age_group", filters.age_group);
+  if (filters.year) params.append("year", filters.year.toString());
+  if (filters.month) params.append("month", filters.month.toString());
+
   const { data } = await apiClient.get("/analytics/trends", { params });
-  return data;
+
+  // Transform data for the chart
+  return data.map((item: TrendsData) => {
+    const date = new Date(item.year, item.month - 1);
+    return {
+      ...item,
+      date: date.toLocaleDateString("en-US", {
+        month: "short",
+        year: "2-digit",
+      }),
+      Convicted: item.total_convictions, // Map backend name to chart key
+      Acquitted: item.total_acquittals, // Map backend name to chart key
+      "Total Cases": item.total_cases, // Map backend name to chart key
+    };
+  });
 };
 
 const getPerformanceRanking = async (
@@ -869,27 +906,10 @@ const getPerformanceRanking = async (
 };
 
 const getSankeyData = async (): Promise<SankeyData> => {
-  // This API endpoint `/analytics/chargesheet-comparison`
-  // is NOT in the backend file you provided.
-  // I am mocking it. You must add it to your backend.
-  console.warn("Mocking Sankey data. API endpoint not found in backend.");
-  return {
-    nodes: [
-      { id: "IPC 302" },
-      { id: "IPC 379" },
-      { id: "Conviction" },
-      { id: "Acquittal" },
-    ],
-    links: [
-      { source: "IPC 302", target: "Conviction", value: 20 },
-      { source: "IPC 302", target: "Acquittal", value: 10 },
-      { source: "IPC 379", target: "Conviction", value: 50 },
-      { source: "IPC 379", target: "Acquittal", value: 30 },
-    ],
-  };
+  return fetchChargesheetComparison();
 };
 
-// --- NEW: Analytics Hooks ---
+// --- Analytics Hooks ---
 
 export const useGetKpis = () => {
   return useQuery<KpiData, Error>({
@@ -899,16 +919,26 @@ export const useGetKpis = () => {
 };
 
 export const useGetConvictionRate = (groupBy: string) => {
-  return useQuery<ConvictionRateData[], Error>({
+  return useQuery<ConvictionChartData[], Error>({
     queryKey: ["convictionRate", groupBy],
-    queryFn: () => getConvictionRate(groupBy),
+    queryFn: () => fetchConvictionRate(groupBy), // Use the transformer
   });
 };
 
+// --- FEATURE: Added Acquittal Rate hook ---
+export const useGetAcquittalRate = (groupBy: string) => {
+  return useQuery<AcquittalChartData[], Error>({
+    queryKey: ["acquittalRate", groupBy],
+    queryFn: () => fetchAcquittalRate(groupBy),
+  });
+};
+
+// --- FIX: Updated useGetTrends hook ---
 export const useGetTrends = (filters: TrendsFilterParams) => {
-  return useQuery<TrendsData[], Error>({
+  return useQuery<TrendData[], Error>({
+    // Use TrendData (transformed)
     queryKey: ["trends", filters],
-    queryFn: () => getTrends(filters),
+    queryFn: () => getTrends(filters), // Use the new getTrends
   });
 };
 
