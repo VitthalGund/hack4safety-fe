@@ -119,7 +119,7 @@ export default function CaseList() {
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
           </div>
         ) : (
-          <Table>
+          <Table className="p-2">
             <TableHeader>
               <TableRow>
                 <TableHead>Case Number</TableHead>

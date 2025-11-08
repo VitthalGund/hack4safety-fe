@@ -1,49 +1,53 @@
-"use client"
+"use client";
 
-import type React from "react"
+import { useEffect, useState } from "react";
+import { usePathname, useRouter } from "next/navigation";
+import { useAuthStore } from "@/lib/auth-store";
+import { Spinner } from "@/components/ui/spinner"; // CORRECTED import path
 
-import { useEffect } from "react"
-import { useRouter } from "next/navigation"
-import { useAuth } from "@/hooks/use-auth"
-import { Loader2 } from "lucide-react"
+// Hard-code the known login path
+const LOGIN_PATH = "/auth/login";
 
-interface ProtectedRouteProps {
-  children: React.ReactNode
-  requiredRoles?: string[]
-}
+export function ProtectedRoute({ children }: { children: React.ReactNode }) {
+  const { isAuthenticated } = useAuthStore();
+  const { pathname } = usePathname();
+  const router = useRouter();
+  const [isHydrated, setIsHydrated] = useState(false);
 
-export function ProtectedRoute({ children, requiredRoles }: ProtectedRouteProps) {
-  const router = useRouter()
-  const { isAuthenticated, isLoading, user } = useAuth()
+  // This effect runs on the client after mount.
+  // By this time, the store will have rehydrated from localStorage.
+  useEffect(() => {
+    setIsHydrated(true);
+  }, []);
 
   useEffect(() => {
-    if (!isLoading && !isAuthenticated) {
-      router.push("/auth/login")
+    // Only run the auth check *after* the component has hydrated.
+    if (isHydrated && !isAuthenticated) {
+      router.push(LOGIN_PATH); // CORRECTED path
     }
+  }, [isHydrated, isAuthenticated, router, pathname]);
 
-    if (!isLoading && isAuthenticated && user && requiredRoles && !requiredRoles.includes(user.role)) {
-      router.push("/app/unauthorized")
-    }
-  }, [isAuthenticated, isLoading, user, requiredRoles, router])
-
-  if (isLoading) {
+  // While hydrating, show a loader to prevent layout shifts
+  // or flashing the login page.
+  if (!isHydrated) {
+    // Show a full-page loader
     return (
-      <div className="min-h-screen bg-white dark:bg-[#0F1729] flex items-center justify-center">
-        <div className="text-center">
-          <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400 mx-auto mb-4" />
-          <p className="text-slate-600 dark:text-slate-400">Loading...</p>
-        </div>
+      <div className="flex h-screen w-full items-center justify-center">
+        <Spinner size="lg" />
       </div>
-    )
+    );
   }
 
-  if (!isAuthenticated) {
-    return null
+  // If hydrated and authenticated, show the app.
+  if (isAuthenticated) {
+    return <>{children}</>;
   }
 
-  if (user && requiredRoles && !requiredRoles.includes(user.role)) {
-    return null
-  }
-
-  return <>{children}</>
+  // If hydrated and not authenticated, the useEffect is redirecting.
+  // Return a loader to prevent flashing content.
+  return (
+    <div className="flex h-screen w-full items-center justify-center">
+      <Spinner size={"30px"} />
+    </div>
+  );
 }
