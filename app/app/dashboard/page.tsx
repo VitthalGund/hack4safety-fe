@@ -45,7 +45,7 @@ export default function DashboardPage() {
 
         {/* Performance Rankings */}
         <div className="mb-8">
-          <PerformanceRankings />
+          <PerformanceRankings key={user?.name} />
         </div>
 
         {/* Chargesheet Comparison */}

@@ -15,7 +15,6 @@ import {
 import { Card } from "@/components/ui/card";
 import { fetchTrends, TrendData } from "@/lib/api-services";
 import { AlertCircle, Loader2 } from "lucide-react";
-// --- FIX: Import Select components ---
 import {
   Select,
   SelectContent,
@@ -24,26 +23,56 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 
-// --- FIX: Create a list of years for the filter ---
+// --- FIX: Create lists for filters ---
 const currentYear = new Date().getFullYear();
 const years = Array.from({ length: 10 }, (_, i) => currentYear - i); // [2025, 2024, ...]
+const months = [
+  { value: 1, label: "Jan" },
+  { value: 2, label: "Feb" },
+  { value: 3, label: "Mar" },
+  { value: 4, label: "Apr" },
+  { value: 5, label: "May" },
+  { value: 6, label: "Jun" },
+  { value: 7, label: "Jul" },
+  { value: 8, label: "Aug" },
+  { value: 9, label: "Sep" },
+  { value: 10, label: "Oct" },
+  { value: 11, label: "Nov" },
+  { value: 12, label: "Dec" },
+];
 
 export default function TrendsChart() {
   const [data, setData] = useState<TrendData[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
 
-  // --- FIX: Add state for the selected year ---
-  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
+  // --- FIX: Default to last 2 years (e.g., 2024) ---
+  const [selectedYear, setSelectedYear] = useState<number | null>(
+    currentYear - 1
+  );
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
 
   useEffect(() => {
     const loadTrends = async () => {
       try {
         setLoading(true);
         setError(null);
-        // --- FIX: Pass selectedYear to the fetch function ---
-        const result = await fetchTrends(period, selectedYear);
+
+        let yearToFetch = selectedYear;
+        let monthToFetch = selectedMonth;
+
+        // Logic for "Yearly" toggle
+        if (period === "yearly") {
+          yearToFetch = null; // Yearly shows all years
+          monthToFetch = null;
+          if (selectedYear || selectedMonth) {
+            setSelectedYear(null); // Reset filters if user clicks "Yearly"
+            setSelectedMonth(null);
+          }
+        }
+
+        const result = await fetchTrends(period, yearToFetch, monthToFetch);
         setData(result);
       } catch (err) {
         console.error("Failed to load trends:", err);
@@ -56,7 +85,7 @@ export default function TrendsChart() {
     };
 
     loadTrends();
-  }, [period, selectedYear]); // --- FIX: Re-run when year changes ---
+  }, [period, selectedYear, selectedMonth]); // Re-run when any filter changes
 
   const chartData = data;
 
@@ -83,14 +112,17 @@ export default function TrendsChart() {
             Trends Over Time
           </h2>
 
-          {/* --- FIX: Add Year Filter Select --- */}
           <div className="flex gap-2">
+            {/* --- FIX: Add Year Filter Select --- */}
             <Select
               value={selectedYear?.toString() ?? "all"}
               onValueChange={(value) => {
-                setSelectedYear(value === "all" ? null : Number(value));
+                const newYear = value === "all" ? null : Number(value);
+                setSelectedYear(newYear);
+                if (newYear) setPeriod("monthly"); // Force monthly if year is set
+                if (!newYear) setSelectedMonth(null); // Clear month if "All Years"
               }}
-              disabled={loading}
+              disabled={loading || period === "yearly"}
             >
               <SelectTrigger className="w-[120px] bg-slate-200 dark:bg-slate-700">
                 <SelectValue placeholder="Year" />
@@ -105,26 +137,43 @@ export default function TrendsChart() {
               </SelectContent>
             </Select>
 
-            {/* Period buttons (existing) */}
-            {(["monthly", "yearly"] as const).map((opt) => (
-              <button
-                key={opt}
-                onClick={() => setPeriod(opt)}
-                disabled={loading || !!selectedYear} // Disable if a year is selected
-                className={`px-4 py-2 rounded-lg transition-colors capitalize ${
-                  period === opt
-                    ? "bg-indigo-600 text-white dark:bg-indigo-500"
-                    : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
-                }`}
-                title={
-                  selectedYear
-                    ? "Yearly view is disabled when a year is selected"
-                    : ""
-                }
-              >
-                {opt}
-              </button>
-            ))}
+            {/* --- FIX: Add Month Filter Select --- */}
+            <Select
+              value={selectedMonth?.toString() ?? "all"}
+              onValueChange={(value) => {
+                setSelectedMonth(value === "all" ? null : Number(value));
+              }}
+              disabled={loading || !selectedYear} // Disabled if no year is selected
+            >
+              <SelectTrigger className="w-[120px] bg-slate-200 dark:bg-slate-700">
+                <SelectValue placeholder="Month" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Months</SelectItem>
+                {months.map((month) => (
+                  <SelectItem key={month.value} value={month.value.toString()}>
+                    {month.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            <button
+              onClick={() => setPeriod("yearly")}
+              disabled={loading || !!selectedYear} // Disable if a year is selected
+              className={`px-4 py-2 rounded-lg transition-colors capitalize text-sm ${
+                period === "yearly"
+                  ? "bg-indigo-600 text-white dark:bg-indigo-500"
+                  : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
+              }`}
+              title={
+                selectedYear
+                  ? "Yearly view is disabled when a year is selected"
+                  : ""
+              }
+            >
+              Yearly
+            </button>
           </div>
         </div>
 

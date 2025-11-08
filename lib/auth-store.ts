@@ -22,6 +22,7 @@ export enum UserRole {
 
 interface AuthState {
   token: string | null;
+  refreshToken: string | null;
   user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
@@ -30,12 +31,14 @@ interface AuthState {
   logout: () => void;
   setUser: () => Promise<void>;
   clearError: () => void;
+  setTokens: (access: string, refresh: string) => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
       token: null,
+      refreshToken: null,
       user: null,
       isAuthenticated: false,
       isLoading: false,
@@ -43,29 +46,36 @@ export const useAuthStore = create<AuthState>()(
 
       clearError: () => set({ error: null }),
 
+      setTokens: (access: string, refresh: string) => {
+        set({ token: access, refreshToken: refresh, isAuthenticated: true });
+      },
+
       login: async (username, password) => {
         set({ isLoading: true, error: null });
         try {
-          // --- FIX: Create form data (URLSearchParams) ---
           const params = new URLSearchParams();
           params.append("username", username);
           params.append("password", password);
 
-          // --- FIX: Send as 'application/x-www-form-urlencoded' ---
-          const response = await apiClient.post<{ access_token: string }>(
-            "/auth/token",
-            params, // Send params as data
-            {
-              headers: {
-                "Content-Type": "application/x-www-form-urlencoded",
-              },
-            }
-          );
+          // --- FIX: Expect both tokens from /auth/token ---
+          const response = await apiClient.post<{
+            access_token: string;
+            refresh_token: string;
+          }>("/auth/token", params, {
+            headers: {
+              "Content-Type": "application/x-www-form-urlencoded",
+            },
+          });
 
-          const token = response.data.access_token;
-          set({ token, isAuthenticated: true });
+          const { access_token, refresh_token } = response.data;
 
-          // After setting the token, fetch the user details
+          // --- FIX: Use new setTokens action ---
+          set({
+            token: access_token,
+            refreshToken: refresh_token,
+            isAuthenticated: true,
+          });
+
           await get().setUser();
           set({ isLoading: false });
         } catch (error: any) {
@@ -73,7 +83,6 @@ export const useAuthStore = create<AuthState>()(
           const detail =
             error.response?.data?.detail || "Invalid username or password.";
           set({ isLoading: false, error: detail });
-          // Re-throw the error to be handled by the UI
           throw error;
         }
       },
@@ -81,6 +90,7 @@ export const useAuthStore = create<AuthState>()(
       logout: () => {
         set({
           token: null,
+          refreshToken: null, // <-- FIX: Clear refresh token
           user: null,
           isAuthenticated: false,
           error: null,
@@ -98,8 +108,7 @@ export const useAuthStore = create<AuthState>()(
           set({ user: response.data });
         } catch (error) {
           console.error("Failed to fetch user data:", error);
-          // If we can't get user, log out
-          get().logout();
+          // Don't log out here, the interceptor will handle it
         }
       },
     }),
@@ -110,7 +119,6 @@ export const useAuthStore = create<AuthState>()(
   )
 );
 
-// This re-hydrates the user info on app load if a token is present
 export const initializeAuth = () => {
   const { token, user, setUser } = useAuthStore.getState();
   if (token && !user) {
