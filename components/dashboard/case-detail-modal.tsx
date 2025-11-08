@@ -85,7 +85,7 @@ export default function CaseDetailModal({
 
         <div className="flex-grow overflow-y-auto pr-6">
           {loading && !error && (
-            <div className="space-y-4">
+            <div className="space-y-4 cursor-pointer">
               <Skeleton className="h-8 w-3/4" />
               <Skeleton className="h-4 w-1/2" />
               <Skeleton className="h-20 w-full" />
