@@ -13,6 +13,9 @@ import {
   Loader2,
   Send,
   User,
+  Download,
+  Copy,
+  FileText,
 } from "lucide-react";
 import { askCaseBot, askLegalBot } from "@/lib/api-services";
 import {
@@ -23,6 +26,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import Image from "next/image";
+import ReactMarkdown from "react-markdown";
+import remarkGfm from "remark-gfm";
+import jsPDF from "jspdf";
+import html2canvas from "html2canvas";
+import { toast } from "sonner";
 
 type BotType = "cases" | "legal";
 
@@ -39,6 +47,70 @@ export default function AiAssistantPage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [botType, setBotType] = useState<BotType>("cases");
+
+  const handleExportMarkdown = (
+    content: string,
+    id: string,
+    type: BotType = "cases"
+  ) => {
+    const blob = new Blob([content], { type: "text/markdown;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    const shortId = id.split("-")[0];
+    a.download = `${type}-response-${shortId}.md`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    toast.success("Markdown file saved!");
+  };
+
+  const handleCopy = (content: string) => {
+    navigator.clipboard.writeText(content).then(
+      () => {
+        toast.success("Copied to clipboard!");
+      },
+      (err) => {
+        console.error("Failed to copy:", err);
+        toast.error("Failed to copy to clipboard.");
+      }
+    );
+  };
+
+  const handleSavePdf = async (id: string, type: BotType = "cases") => {
+    const elementToCapture = document.getElementById(id);
+    if (!elementToCapture) {
+      console.error("Could not find element to save as PDF.");
+      toast.error("Failed to save PDF: Element not found.");
+      return;
+    }
+
+    try {
+      const canvas = await html2canvas(elementToCapture, {
+        useCORS: true,
+        scale: 2,
+        backgroundColor: document.body.classList.contains("dark")
+          ? "#334155"
+          : "#e2e8f0",
+      });
+
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "p",
+        unit: "px",
+        format: [canvas.width, canvas.height],
+      });
+
+      pdf.addImage(imgData, "PNG", 0, 0, canvas.width, canvas.height);
+      const shortId = id.split("-")[0];
+      pdf.save(`${type}-response-${shortId}.pdf`);
+      toast.success("PDF file saved!"); // <-- Added feedback
+    } catch (err) {
+      console.error("Failed to save PDF:", err);
+      toast.error("Failed to save PDF.");
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -143,18 +215,63 @@ export default function AiAssistantPage() {
               }`}
             >
               <div
+                id={msg.id}
                 className={`p-3 rounded-lg max-w-[70%] ${
                   msg.sender === "user"
                     ? "bg-indigo-600 text-white"
                     : "bg-slate-200 text-slate-900 dark:bg-slate-700 dark:text-white"
                 }`}
               >
-                <div
-                  className="prose prose-sm dark:prose-invert max-w-none"
-                  dangerouslySetInnerHTML={{
-                    __html: msg.text.replace(/\n/g, "<br />"),
-                  }}
-                />
+                {msg.sender === "bot" && (
+                  <div className="flex justify-between items-center mb-2 -mt-1">
+                    <span className="flex items-center gap-1.5 text-sm font-semibold opacity-70">
+                      {msg.botType === "cases" ? (
+                        <BrainCircuit className="w-4 h-4" />
+                      ) : (
+                        <Gavel className="w-4 h-4" />
+                      )}
+                      AI Assistant
+                    </span>
+                    <div className="flex items-center -mr-2">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-600 dark:text-slate-300"
+                        onClick={() => handleCopy(msg.text)}
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-600 dark:text-slate-300"
+                        onClick={() => handleSavePdf(msg.id, msg.botType)}
+                      >
+                        <FileText className="h-4 w-4" />
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-7 w-7 text-slate-600 dark:text-slate-300"
+                        onClick={() =>
+                          handleExportMarkdown(msg.text, msg.id, msg.botType)
+                        }
+                      >
+                        <Download className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </div>
+                )}
+
+                {msg.sender === "user" ? (
+                  <div className="whitespace-pre-wrap">{msg.text}</div>
+                ) : (
+                  <div className="prose prose-sm dark:prose-invert max-w-none">
+                    <ReactMarkdown remarkPlugins={[remarkGfm]}>
+                      {msg.text}
+                    </ReactMarkdown>
+                  </div>
+                )}
               </div>
             </div>
           ))}

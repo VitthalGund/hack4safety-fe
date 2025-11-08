@@ -3,11 +3,16 @@
 import type React from "react";
 
 import { ProtectedRoute } from "@/components/protected-route";
+import { Toaster } from "@/components/ui/sonner";
+import { QueryProvider } from "@/components/query-provider";
 import AppSidebar from "@/components/app/sidebar";
 import AppHeader from "@/components/app/header";
-import { QueryProvider } from "@/components/query-provider";
 
-export default function AppLayout({ children }: { children: React.ReactNode }) {
+export default function AppLayout({
+  children,
+}: Readonly<{
+  children: React.ReactNode;
+}>) {
   return (
     <QueryProvider>
       <ProtectedRoute>
@@ -20,6 +25,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
             </main>
           </div>
         </div>
+        <Toaster position="top-right" richColors />
       </ProtectedRoute>
     </QueryProvider>
   );
