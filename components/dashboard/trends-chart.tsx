@@ -13,11 +13,20 @@ import {
   ResponsiveContainer,
 } from "recharts";
 import { Card } from "@/components/ui/card";
-// --- FIX: Import new data type and implemented function ---
 import { fetchTrends, TrendData } from "@/lib/api-services";
 import { AlertCircle, Loader2 } from "lucide-react";
+// --- FIX: Import Select components ---
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
-// --- FIX: Interface removed, now imported from api-services ---
+// --- FIX: Create a list of years for the filter ---
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 10 }, (_, i) => currentYear - i); // [2025, 2024, ...]
 
 export default function TrendsChart() {
   const [data, setData] = useState<TrendData[]>([]);
@@ -25,12 +34,16 @@ export default function TrendsChart() {
   const [error, setError] = useState<string | null>(null);
   const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
 
+  // --- FIX: Add state for the selected year ---
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+
   useEffect(() => {
     const loadTrends = async () => {
       try {
         setLoading(true);
-        setError(null); // Clear previous errors
-        const result = await fetchTrends(period);
+        setError(null);
+        // --- FIX: Pass selectedYear to the fetch function ---
+        const result = await fetchTrends(period, selectedYear);
         setData(result);
       } catch (err) {
         console.error("Failed to load trends:", err);
@@ -43,9 +56,8 @@ export default function TrendsChart() {
     };
 
     loadTrends();
-  }, [period]); // Re-run when 'period' changes
+  }, [period, selectedYear]); // --- FIX: Re-run when year changes ---
 
-  // --- FIX: Data is now pre-formatted by fetchTrends, no .map() needed ---
   const chartData = data;
 
   if (error) {
@@ -66,21 +78,49 @@ export default function TrendsChart() {
       transition={{ duration: 0.5 }}
     >
       <Card className="p-6 dark:border-slate-700">
-        <div className="flex items-center justify-between mb-6">
+        <div className="flex flex-wrap items-center justify-between gap-4 mb-6">
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
             Trends Over Time
           </h2>
+
+          {/* --- FIX: Add Year Filter Select --- */}
           <div className="flex gap-2">
+            <Select
+              value={selectedYear?.toString() ?? "all"}
+              onValueChange={(value) => {
+                setSelectedYear(value === "all" ? null : Number(value));
+              }}
+              disabled={loading}
+            >
+              <SelectTrigger className="w-[120px] bg-slate-200 dark:bg-slate-700">
+                <SelectValue placeholder="Year" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Years</SelectItem>
+                {years.map((year) => (
+                  <SelectItem key={year} value={year.toString()}>
+                    {year}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+
+            {/* Period buttons (existing) */}
             {(["monthly", "yearly"] as const).map((opt) => (
               <button
                 key={opt}
                 onClick={() => setPeriod(opt)}
-                disabled={loading} // Disable while loading
+                disabled={loading || !!selectedYear} // Disable if a year is selected
                 className={`px-4 py-2 rounded-lg transition-colors capitalize ${
                   period === opt
                     ? "bg-indigo-600 text-white dark:bg-indigo-500"
                     : "bg-slate-200 text-slate-700 dark:bg-slate-700 dark:text-slate-300 hover:bg-slate-300 dark:hover:bg-slate-600 disabled:opacity-50"
                 }`}
+                title={
+                  selectedYear
+                    ? "Yearly view is disabled when a year is selected"
+                    : ""
+                }
               >
                 {opt}
               </button>
@@ -94,7 +134,6 @@ export default function TrendsChart() {
           </div>
         ) : (
           <ResponsiveContainer width="100%" height={400}>
-            {/* --- FIX: Removed yAxisId="right" as we removed the second axis --- */}
             <LineChart
               data={chartData}
               margin={{ top: 20, right: 30, left: 0, bottom: 20 }}
@@ -129,7 +168,6 @@ export default function TrendsChart() {
                 strokeWidth={2}
                 dot={{ fill: "#f59e0b" }}
               />
-              {/* --- FIX: Removed line for "Avg Duration" as API doesn't provide it --- */}
             </LineChart>
           </ResponsiveContainer>
         )}

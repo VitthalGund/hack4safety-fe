@@ -1,6 +1,6 @@
 import apiClient from "./api-client";
 
-// --- TrendData (From previous step) ---
+// --- Types and Functions for Trends Chart ---
 interface TrendApiResponse {
   year: number;
   month: number;
@@ -15,18 +15,32 @@ export interface TrendData {
   "Total Cases": number;
 }
 export const fetchTrends = async (
-  period: "monthly" | "yearly"
+  period: "monthly" | "yearly",
+  year: number | null // <-- FIX: Added year parameter
 ): Promise<TrendData[]> => {
-  const response = await apiClient.get<TrendApiResponse[]>("/analytics/trends");
+  // --- FIX: Pass params to the API call ---
+  const response = await apiClient.get<TrendApiResponse[]>(
+    "/analytics/trends",
+    {
+      params: {
+        // The backend doesn't use 'period', but we pass 'year'
+        year: year || undefined, // Send 'undefined' if year is null
+      },
+    }
+  );
+
   if (!Array.isArray(response.data)) {
     throw new Error("Invalid data format received from server.");
   }
   const transformedData: TrendData[] = response.data.map((item) => {
     const date = new Date(item.year, item.month - 1);
+
+    // --- FIX: Adjust date format based on whether a year is selected ---
     const dateString = date.toLocaleDateString("en-US", {
       month: "short",
-      year: "numeric",
+      year: year ? undefined : "numeric", // Only show year if no filter is set
     });
+
     return {
       date: dateString,
       Convicted: item.total_convictions,
@@ -171,22 +185,11 @@ export async function fetchKPIDurations() {
   return apiService.fetchKPIDurations();
 }
 
-export async function fetchConvictionRate(
-  groupBy: string,
-  filters?: Record<string, string>
-) {
-  return apiService.fetchConvictionRate(groupBy, filters);
-}
-
 export async function fetchPerformanceRanking(
   entityType: "io" | "pp" | "unit",
   limit = 10
 ) {
   return apiService.fetchPerformanceRanking(entityType, limit);
-}
-
-export async function fetchChargesheetComparison() {
-  return apiService.fetchChargesheetComparison();
 }
 
 export async function searchCases(
@@ -226,27 +229,17 @@ export interface RankingData {
   convictionRate: number;
   totalCases: number;
 }
-
-// 2. Define the shapes the BACKEND provides
 interface OfficerRankingResponse {
   officer_name: string;
-  rank: string; // This is the 'unit' for an officer
-  total_convictions: number;
-  total_acquittals: number;
+  rank: string;
   total_cases: number;
   conviction_rate: number;
 }
-
 interface StationRankingResponse {
-  police_station: string; // This is the 'name' for a station
-  // Note: Backend doesn't provide a 'unit' (like District) here.
-  total_convictions: number;
-  total_acquittals: number;
+  police_station: string;
   total_cases: number;
   conviction_rate: number;
 }
-
-// 3. Implement the API service function
 export const fetchPerformanceRankings = async (
   groupBy: "Investigating_Officer" | "Police_Station"
 ): Promise<RankingData[]> => {
@@ -255,28 +248,189 @@ export const fetchPerformanceRankings = async (
   >("/analytics/performance/ranking", {
     params: { group_by: groupBy },
   });
-
   if (!Array.isArray(response.data)) {
     throw new Error("Invalid data format for rankings.");
   }
-
-  // 4. Transform the data to match the component's expected shape
   if (groupBy === "Investigating_Officer") {
     return (response.data as OfficerRankingResponse[]).map((item, index) => ({
       rank: index + 1,
       name: item.officer_name,
-      unit: item.rank, // For officers, 'unit' is their rank (e.g., "Inspector")
-      convictionRate: item.conviction_rate * 100, // Convert to percentage
+      unit: item.rank,
+      convictionRate: item.conviction_rate * 100,
       totalCases: item.total_cases,
     }));
   } else {
-    // groupBy === "Police_Station"
     return (response.data as StationRankingResponse[]).map((item, index) => ({
       rank: index + 1,
       name: item.police_station,
-      unit: "N/A", // Backend doesn't provide District, so we send "N/A"
-      convictionRate: item.conviction_rate * 100, // Convert to percentage
+      unit: "N/A",
+      convictionRate: item.conviction_rate * 100,
       totalCases: item.total_cases,
     }));
   }
+};
+
+// --- Types and Functions for Conviction Rate Chart (Phase 3, Step 3) ---
+export interface ConvictionChartData {
+  name: string;
+  ConvictionRate: number;
+}
+interface ConvictionRateResponse {
+  [key: string]: any;
+  total_cases: number;
+  conviction_rate: number;
+}
+export const fetchConvictionRate = async (
+  groupBy: "District" | "Court_Name" | "Crime_Type"
+): Promise<ConvictionChartData[]> => {
+  const response = await apiClient.get<ConvictionRateResponse[]>(
+    "/analytics/conviction-rate",
+    {
+      params: { group_by: groupBy },
+    }
+  );
+  if (!Array.isArray(response.data)) {
+    throw new Error("Invalid data format for conviction rate.");
+  }
+  const transformedData: ConvictionChartData[] = response.data.map((item) => ({
+    name: item[groupBy],
+    ConvictionRate: parseFloat((item.conviction_rate * 100).toFixed(1)),
+  }));
+  return transformedData;
+};
+
+// --- Types and Functions for KPI Cards (Phase 3, Step 4) ---
+export interface KPIData {
+  totalCases: number;
+  avgLifecycleDays: number;
+  avgInvestigationDays: number;
+  avgTrialDays: number;
+}
+interface DurationsResponse {
+  avg_investigation_days: number;
+  avg_trial_days: number;
+  avg_lifecycle_days: number;
+}
+export const fetchKPIs = async (): Promise<KPIData> => {
+  const [durationsRes, convictionRateRes] = await Promise.all([
+    apiClient.get<DurationsResponse>("/analytics/kpi/durations"),
+    apiClient.get<ConvictionRateResponse[]>("/analytics/conviction-rate", {
+      params: { group_by: "District" },
+    }),
+  ]);
+  const durationsData = durationsRes.data;
+  if (!Array.isArray(convictionRateRes.data)) {
+    throw new Error("Invalid data for KPI total cases.");
+  }
+  const totalCases = convictionRateRes.data.reduce(
+    (acc, curr) => acc + curr.total_cases,
+    0
+  );
+  return {
+    totalCases: totalCases,
+    avgLifecycleDays: durationsData.avg_lifecycle_days,
+    avgInvestigationDays: durationsData.avg_investigation_days,
+    avgTrialDays: durationsData.avg_trial_days,
+  };
+};
+
+// --- Types and Function for Chargesheet Sankey ---
+
+// 1. Define the shapes the FRONTEND component expects
+export interface SankeyNode {
+  id: string;
+}
+export interface SankeyLink {
+  source: string;
+  target: string;
+  value: number;
+}
+export interface SankeyData {
+  nodes: SankeyNode[];
+  links: SankeyLink[];
+}
+
+// 2. Backend response types
+interface ChargesheetGroup {
+  _id: number; // 1 for chargesheeted, 0 for not
+  total_convictions: number;
+  total_acquittals: number;
+}
+interface ChargesheetResponse {
+  summary: object;
+  by_group: ChargesheetGroup[]; // <-- The array is nested here
+}
+
+// 3. Implement the API service function
+export const fetchChargesheetComparison = async (): Promise<SankeyData> => {
+  const response = await apiClient.get<ChargesheetResponse[]>(
+    "/analytics/chargesheet-comparison"
+  );
+
+  // --- FIX: Check the nested 'by_group' array ---
+  if (!Array.isArray(response.data.by_group)) {
+    throw new Error("Invalid data for chargesheet comparison.");
+  }
+
+  const backendData = response.data.by_group;
+
+  // 4. Define nodes
+  const nodes: SankeyNode[] = [
+    { id: "Total Cases" },
+    { id: "Chargesheeted" },
+    { id: "Not Chargesheeted" },
+    { id: "Convicted" },
+    { id: "Acquitted" },
+  ];
+
+  // 5. Process backend data
+  const cs_data = backendData.find((d) => d._id === 1) ?? {
+    total_convictions: 0,
+    total_acquittals: 0,
+  };
+  const no_cs_data = backendData.find((d) => d._id === 0) ?? {
+    total_convictions: 0,
+    total_acquittals: 0,
+  };
+
+  const total_chargesheeted =
+    cs_data.total_convictions + cs_data.total_acquittals;
+  const total_not_chargesheeted =
+    no_cs_data.total_convictions + no_cs_data.total_acquittals;
+
+  // 6. Create links
+  const links: SankeyLink[] = [
+    {
+      source: "Total Cases",
+      target: "Chargesheeted",
+      value: total_chargesheeted,
+    },
+    {
+      source: "Total Cases",
+      target: "Not Chargesheeted",
+      value: total_not_chargesheeted,
+    },
+    {
+      source: "Chargesheeted",
+      target: "Convicted",
+      value: cs_data.total_convictions,
+    },
+    {
+      source: "Chargesheeted",
+      target: "Acquitted",
+      value: cs_data.total_acquittals,
+    },
+    {
+      source: "Not Chargesheeted",
+      target: "Convicted",
+      value: no_cs_data.total_convictions,
+    },
+    {
+      source: "Not Chargesheeted",
+      target: "Acquitted",
+      value: no_cs_data.total_acquittals,
+    },
+  ].filter((link) => link.value > 0);
+
+  return { nodes, links };
 };
