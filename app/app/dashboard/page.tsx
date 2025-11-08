@@ -1,63 +1,130 @@
 "use client";
 
-import { motion } from "framer-motion";
-import { useAuth } from "@/hooks/use-auth";
-import KPICards from "@/components/dashboard/kpi-cards";
+import { useState } from "react";
+import { useAuthStore } from "@/lib/auth-store";
+import KpiCards from "@/components/dashboard/kpi-cards";
 import ConvictionRateChart from "@/components/dashboard/conviction-rate-chart";
 import PerformanceRankings from "@/components/dashboard/performance-rankings";
 import CaseList from "@/components/dashboard/case-list";
-import TrendsChart from "@/components/dashboard/trends-chart";
-import ChargesheetSankey from "@/components/dashboard/chargesheet-sankey";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  useGetCases,
+  useGetMetadataFields,
+  useGetTrends,
+} from "@/lib/api-services";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { TrendsChart } from "@/components/dashboard/trends-chart";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
 
 export default function DashboardPage() {
-  const { user } = useAuth();
+  const { user } = useAuthStore();
+  const [crimeTypeFilter, setCrimeTypeFilter] = useState<string>("");
+  const [timePeriod, setTimePeriod] = useState<"monthly" | "yearly">("monthly");
+
+  // Fetch data for cases list
+  const { data: cases, isLoading: isLoadingCases } = useGetCases(
+    "",
+    user?.district ? { district: user.district } : {}
+  );
+
+  // Fetch data for new trends chart
+  const { data: trendsData, isLoading: isLoadingTrends } =
+    useGetTrends(crimeTypeFilter);
+
+  // Fetch data for filter dropdowns
+  const { data: metadata, isLoading: isLoadingMetadata } =
+    useGetMetadataFields();
 
   return (
-    <div className="p-8 space-y-8">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ duration: 0.5 }}
-      >
-        <div className="mb-8">
-          {/* --- FIX: Changed 'name' to 'full_name' --- */}
-          <h1 className="text-4xl font-bold text-slate-900 dark:text-white mb-2">
-            Welcome back, {user?.full_name}
-          </h1>
-          <p className="text-slate-600 dark:text-slate-400">
-            Role:{" "}
-            <span className="font-semibold text-indigo-600 dark:text-indigo-400">
-              {user?.role}
-            </span>
-          </p>
-        </div>
+    <div className="flex flex-col gap-6 p-4">
+      <KpiCards />
 
-        {/* KPI Cards Section */}
-        <div className="mb-8">
-          <KPICards />
-        </div>
+      {/* --- MODIFIED: Changed grid to single column --- */}
+      <div className="grid grid-cols-1 gap-6">
+        <ConvictionRateChart />
 
-        {/* Charts Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-          <ConvictionRateChart />
-          <TrendsChart />
-        </div>
+        <Card>
+          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+            <CardTitle>Trends Over Time</CardTitle>
+            <div className="flex flex-col gap-2 md:flex-row">
+              {/* --- CRIME TYPE FILTER --- */}
+              <Select
+                value={crimeTypeFilter}
+                onValueChange={(value) =>
+                  setCrimeTypeFilter(value === "all" ? "" : value)
+                }
+              >
+                <SelectTrigger className="w-full md:w-[180px]">
+                  <SelectValue placeholder="Select Crime Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Crime Types</SelectItem>
+                  {isLoadingMetadata ? (
+                    <SelectItem value="loading" disabled>
+                      Loading...
+                    </SelectItem>
+                  ) : (
+                    metadata?.Crime_Type?.map((type) => (
+                      <SelectItem key={type} value={type}>
+                        {type}
+                      </SelectItem>
+                    ))
+                  )}
+                </SelectContent>
+              </Select>
 
-        {/* Performance Rankings */}
-        <div className="mb-8">
-          <PerformanceRankings key={user?.name} />
-        </div>
+              {/* --- MONTHLY/YEARLY TOGGLE --- */}
+              <ToggleGroup
+                type="single"
+                value={timePeriod}
+                onValueChange={(value) => {
+                  if (value) setTimePeriod(value as "monthly" | "yearly");
+                }}
+                className="w-full md:w-auto"
+              >
+                <ToggleGroupItem value="monthly" className="w-full">
+                  Monthly
+                </ToggleGroupItem>
+                <ToggleGroupItem value="yearly" className="w-full">
+                  Yearly
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          </CardHeader>
+          <CardContent>
+            {/* --- PASS NEW PROP TO CHART --- */}
+            <TrendsChart
+              data={trendsData}
+              isLoading={isLoadingTrends}
+              period={timePeriod}
+            />
+          </CardContent>
+        </Card>
+      </div>
+      {/* --- END OF MODIFICATION --- */}
 
-        {/* Chargesheet Comparison */}
-        <div className="mb-8">
-          <ChargesheetSankey />
+      <div className="flex flex-col gap-6">
+        <div className="">
+          <PerformanceRankings />
         </div>
-
-        {/* Case List */}
-        <div>
-          <CaseList />
-        </div>
-      </motion.div>
+        <Card>
+          <CardHeader>
+            <CardTitle>Recent Cases</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <CaseList
+              cases={cases?.slice(0, 5) || []}
+              isLoading={isLoadingCases}
+            />
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }

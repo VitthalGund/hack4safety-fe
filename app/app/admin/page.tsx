@@ -1,83 +1,109 @@
-"use client"
+"use client";
 
-import { useState } from "react"
-import { motion } from "framer-motion"
-import { Users, Settings, AlertTriangle, BarChart3, Shield, Lock } from "lucide-react"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
-import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { apiService } from "@/lib/api-services"
-import useSWR from "swr"
+import { useState } from "react";
+import { motion } from "framer-motion";
+import {
+  Users,
+  Settings,
+  AlertTriangle,
+  BarChart3,
+  Shield,
+  Lock,
+} from "lucide-react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { apiService } from "@/lib/api-services";
+import useSWR from "swr";
 
 interface AdminStats {
-  total_users: number
-  active_sessions: number
-  system_health: number
-  pending_approvals: number
+  total_users: number;
+  active_sessions: number;
+  system_health: number;
+  pending_approvals: number;
 }
 
 interface User {
-  id: string
-  name: string
-  email: string
-  role: string
-  status: string
-  last_login: string
+  district: string;
+  full_name: string;
+  id: number;
+  police_station: string;
+  role: string;
+  username: string;
 }
 
 export default function AdminPage() {
-  const [searchTerm, setSearchTerm] = useState("")
-  const [selectedTab, setSelectedTab] = useState("overview")
+  const [searchTerm, setSearchTerm] = useState("");
+  const [selectedTab, setSelectedTab] = useState("overview");
 
-  const { data: statsData, isLoading: statsLoading } = useSWR("/api/admin/stats", () => apiService.getAdminStats(), {
-    revalidateOnFocus: false,
-  })
+  const { data: statsData, isLoading: statsLoading } = useSWR(
+    "/api/admin/stats",
+    () => apiService.getAdminStats(),
+    {
+      revalidateOnFocus: false,
+    }
+  );
 
-  const { data: usersData, isLoading: usersLoading } = useSWR("/api/admin/users", () => apiService.getAdminUsers(), {
-    revalidateOnFocus: false,
-  })
+  const { data: usersData, isLoading: usersLoading } = useSWR(
+    "/api/admin/users",
+    () => apiService.getAdminUsers(),
+    {
+      revalidateOnFocus: false,
+    }
+  );
 
   const stats: AdminStats = statsData?.data || {
     total_users: 0,
     active_sessions: 0,
     system_health: 100,
     pending_approvals: 0,
-  }
+  };
 
-  const users: User[] = usersData?.data || []
-
+  const users: User[] = usersData?.data || [];
+  console.log({ users });
   const filteredUsers = users.filter(
     (u) =>
-      u.name.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      u.email.toLowerCase().includes(searchTerm.toLowerCase()),
-  )
+      u.full_name.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      u.username.toLowerCase().includes(searchTerm.toLowerCase())
+  );
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8 p-4">
       {/* Header with Role Guard */}
       <div className="space-y-4">
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold text-foreground">Admin Dashboard</h1>
-            <p className="text-muted-foreground mt-1">System administration and user management</p>
+            <h1 className="text-3xl font-bold text-foreground">
+              Admin Dashboard
+            </h1>
+            <p className="text-muted-foreground mt-1">
+              System administration and user management
+            </p>
           </div>
           <div className="flex items-center gap-2 px-3 py-1 bg-red-100/20 border border-red-200/50 rounded-lg dark:bg-red-900/20 dark:border-red-800/50">
             <Shield className="h-4 w-4 text-red-600 dark:text-red-400" />
-            <span className="text-xs font-semibold text-red-600 dark:text-red-400">Admin Access</span>
+            <span className="text-xs font-semibold text-red-600 dark:text-red-400">
+              Admin Access
+            </span>
           </div>
         </div>
       </div>
 
       {/* Key Metrics */}
       <div className="grid grid-cols-1 md:grid-cols-4 gap-6">
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+        >
           <Card className="border-border bg-card dark:bg-card">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div>
                   <p className="text-sm text-muted-foreground">Total Users</p>
-                  <p className="text-3xl font-bold text-foreground mt-2">{statsLoading ? "..." : stats.total_users}</p>
+                  <p className="text-3xl font-bold text-foreground mt-2">
+                    {statsLoading ? "..." : stats.total_users}
+                  </p>
                 </div>
                 <Users className="h-8 w-8 text-blue-500/40" />
               </div>
@@ -85,12 +111,18 @@ export default function AdminPage() {
           </Card>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+        >
           <Card className="border-border bg-card dark:bg-card">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Active Sessions</p>
+                  <p className="text-sm text-muted-foreground">
+                    Active Sessions
+                  </p>
                   <p className="text-3xl font-bold text-foreground mt-2">
                     {statsLoading ? "..." : stats.active_sessions}
                   </p>
@@ -101,7 +133,11 @@ export default function AdminPage() {
           </Card>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.2 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2 }}
+        >
           <Card className="border-border bg-card dark:bg-card">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
@@ -117,12 +153,18 @@ export default function AdminPage() {
           </Card>
         </motion.div>
 
-        <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.3 }}
+        >
           <Card className="border-border bg-card dark:bg-card border-amber-200/50 dark:border-amber-800/50">
             <CardContent className="pt-6">
               <div className="flex items-start justify-between">
                 <div>
-                  <p className="text-sm text-muted-foreground">Pending Approvals</p>
+                  <p className="text-sm text-muted-foreground">
+                    Pending Approvals
+                  </p>
                   <p className="text-3xl font-bold text-foreground mt-2">
                     {statsLoading ? "..." : stats.pending_approvals}
                   </p>
@@ -135,7 +177,11 @@ export default function AdminPage() {
       </div>
 
       {/* Admin Tabs */}
-      <Tabs value={selectedTab} onValueChange={setSelectedTab} className="w-full">
+      <Tabs
+        value={selectedTab}
+        onValueChange={setSelectedTab}
+        className="w-full"
+      >
         <TabsList className="grid w-full grid-cols-4 bg-card dark:bg-card border border-border rounded-lg p-1">
           <TabsTrigger value="overview">
             <BarChart3 className="h-4 w-4 mr-2" />
@@ -164,18 +210,30 @@ export default function AdminPage() {
               </CardHeader>
               <CardContent className="space-y-4">
                 {[
-                  { label: "API Response Time", value: "120ms", status: "good" },
+                  {
+                    label: "API Response Time",
+                    value: "120ms",
+                    status: "good",
+                  },
                   { label: "Database Load", value: "45%", status: "good" },
                   { label: "Memory Usage", value: "62%", status: "warning" },
                   { label: "Disk Space", value: "78%", status: "warning" },
                 ].map((item, idx) => (
                   <div key={idx} className="flex items-center justify-between">
-                    <span className="text-sm text-foreground">{item.label}</span>
+                    <span className="text-sm text-foreground">
+                      {item.label}
+                    </span>
                     <div className="flex items-center gap-2">
                       <span
-                        className={`h-2 w-2 rounded-full ${item.status === "good" ? "bg-green-500" : "bg-amber-500"}`}
+                        className={`h-2 w-2 rounded-full ${
+                          item.status === "good"
+                            ? "bg-green-500"
+                            : "bg-amber-500"
+                        }`}
                       />
-                      <span className="text-sm font-semibold text-foreground">{item.value}</span>
+                      <span className="text-sm font-semibold text-foreground">
+                        {item.value}
+                      </span>
                     </div>
                   </div>
                 ))}
@@ -207,9 +265,15 @@ export default function AdminPage() {
         <TabsContent value="users" className="space-y-6 mt-6">
           <div className="flex gap-4">
             <div className="flex-1 relative">
-              <Input placeholder="Search users..." value={searchTerm} onChange={(e) => setSearchTerm(e.target.value)} />
+              <Input
+                placeholder="Search users..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+              />
             </div>
-            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-primary">Add User</Button>
+            <Button className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-primary">
+              Add User
+            </Button>
           </div>
 
           <Card className="border-border bg-card dark:bg-card">
@@ -217,7 +281,10 @@ export default function AdminPage() {
               {usersLoading ? (
                 <div className="space-y-3">
                   {[1, 2, 3, 4, 5].map((i) => (
-                    <div key={i} className="h-16 bg-muted rounded-lg animate-pulse" />
+                    <div
+                      key={i}
+                      className="h-16 bg-muted rounded-lg animate-pulse"
+                    />
                   ))}
                 </div>
               ) : (
@@ -225,12 +292,24 @@ export default function AdminPage() {
                   <table className="w-full">
                     <thead>
                       <tr className="border-b border-border">
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">Name</th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">Email</th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">Role</th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">Status</th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">Last Login</th>
-                        <th className="text-left py-3 px-4 font-semibold text-foreground">Actions</th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Full Name
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Username
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Role
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Police Station
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          District
+                        </th>
+                        <th className="text-left py-3 px-4 font-semibold text-foreground">
+                          Actions
+                        </th>
                       </tr>
                     </thead>
                     <tbody>
@@ -242,8 +321,12 @@ export default function AdminPage() {
                           transition={{ delay: idx * 0.05 }}
                           className="border-b border-border/50 hover:bg-muted/50 dark:hover:bg-muted/30 transition-colors"
                         >
-                          <td className="py-3 px-4 text-foreground font-medium">{user.name}</td>
-                          <td className="py-3 px-4 text-foreground text-sm">{user.email}</td>
+                          <td className="py-3 px-4 text-foreground font-medium">
+                            {user.full_name}
+                          </td>
+                          <td className="py-3 px-4 text-foreground text-sm">
+                            {user.username}
+                          </td>
                           <td className="py-3 px-4">
                             <span className="px-2 py-1 bg-primary/10 text-primary rounded-full text-xs dark:bg-primary/20">
                               {user.role}
@@ -252,7 +335,7 @@ export default function AdminPage() {
                           <td className="py-3 px-4">
                             <span
                               className={`px-2 py-1 rounded-full text-xs font-semibold ${
-                                user.status === "active"
+                                user.police_station === "active"
                                   ? "bg-green-100 dark:bg-green-900 text-green-800 dark:text-green-100"
                                   : "bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-100"
                               }`}
@@ -260,9 +343,15 @@ export default function AdminPage() {
                               {user.status}
                             </span>
                           </td>
-                          <td className="py-3 px-4 text-sm text-muted-foreground">{user.last_login}</td>
+                          <td className="py-3 px-4 text-sm text-muted-foreground">
+                            {user.last_login}
+                          </td>
                           <td className="py-3 px-4">
-                            <Button variant="ghost" size="sm" className="text-xs">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="text-xs"
+                            >
                               Edit
                             </Button>
                           </td>
@@ -286,20 +375,34 @@ export default function AdminPage() {
               <div className="space-y-3">
                 <div className="flex items-center justify-between p-4 bg-muted/50 dark:bg-muted/30 rounded-lg">
                   <div>
-                    <p className="font-medium text-foreground">Two-Factor Authentication</p>
-                    <p className="text-sm text-muted-foreground">Enforce 2FA for all users</p>
+                    <p className="font-medium text-foreground">
+                      Two-Factor Authentication
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Enforce 2FA for all users
+                    </p>
                   </div>
-                  <Button variant="outline" className="border-border dark:border-border bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="border-border dark:border-border bg-transparent"
+                  >
                     Configure
                   </Button>
                 </div>
 
                 <div className="flex items-center justify-between p-4 bg-muted/50 dark:bg-muted/30 rounded-lg">
                   <div>
-                    <p className="font-medium text-foreground">API Keys Management</p>
-                    <p className="text-sm text-muted-foreground">Manage system API keys</p>
+                    <p className="font-medium text-foreground">
+                      API Keys Management
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      Manage system API keys
+                    </p>
                   </div>
-                  <Button variant="outline" className="border-border dark:border-border bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="border-border dark:border-border bg-transparent"
+                  >
                     Manage
                   </Button>
                 </div>
@@ -307,9 +410,14 @@ export default function AdminPage() {
                 <div className="flex items-center justify-between p-4 bg-muted/50 dark:bg-muted/30 rounded-lg">
                   <div>
                     <p className="font-medium text-foreground">Audit Logs</p>
-                    <p className="text-sm text-muted-foreground">View system activity logs</p>
+                    <p className="text-sm text-muted-foreground">
+                      View system activity logs
+                    </p>
                   </div>
-                  <Button variant="outline" className="border-border dark:border-border bg-transparent">
+                  <Button
+                    variant="outline"
+                    className="border-border dark:border-border bg-transparent"
+                  >
                     View Logs
                   </Button>
                 </div>
@@ -326,7 +434,9 @@ export default function AdminPage() {
             </CardHeader>
             <CardContent className="space-y-6">
               <div className="space-y-3">
-                <label className="text-sm font-medium text-foreground block">System Name</label>
+                <label className="text-sm font-medium text-foreground block">
+                  System Name
+                </label>
                 <Input
                   defaultValue="Conviction Data Management System"
                   className="border-border dark:bg-muted dark:border-border"
@@ -334,10 +444,14 @@ export default function AdminPage() {
               </div>
 
               <div className="space-y-3">
-                <label className="text-sm font-medium text-foreground block">Maintenance Mode</label>
+                <label className="text-sm font-medium text-foreground block">
+                  Maintenance Mode
+                </label>
                 <div className="flex items-center gap-3 p-3 bg-muted/50 dark:bg-muted/30 rounded-lg">
                   <input type="checkbox" className="w-4 h-4" />
-                  <span className="text-sm text-foreground">Enable maintenance mode</span>
+                  <span className="text-sm text-foreground">
+                    Enable maintenance mode
+                  </span>
                 </div>
               </div>
 
@@ -345,7 +459,10 @@ export default function AdminPage() {
                 <Button className="bg-primary hover:bg-primary/90 text-primary-foreground dark:bg-primary">
                   Save Settings
                 </Button>
-                <Button variant="outline" className="border-border dark:border-border bg-transparent">
+                <Button
+                  variant="outline"
+                  className="border-border dark:border-border bg-transparent"
+                >
                   Reset to Defaults
                 </Button>
               </div>
@@ -354,5 +471,5 @@ export default function AdminPage() {
         </TabsContent>
       </Tabs>
     </div>
-  )
+  );
 }

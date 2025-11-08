@@ -1,7 +1,8 @@
-// api/index.ts
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import apiClient from "./api-client";
 import type { Case } from "@/types/case";
+import { User } from "@/types/user";
+import { UserRole } from "./permissions";
 
 /*
   --------------------
@@ -565,109 +566,6 @@ export async function askCaseBot(query: string, model: string = "gemini") {
   return apiClient.post("/rag/cases", { query, model_provider: model });
 }
 
-/**
- * Defines the structure for the case filter parameters.
- */
-type CaseFilterParams = {
-  district?: string;
-  court_name?: string;
-  result?: string;
-};
-
-/**
- * Defines the response structure for the metadata fields API.
- * This is used to populate the dropdowns.
- */
-type MetadataFields = {
-  sections_of_law: string[];
-  courts: string[];
-  judges: string[];
-  districts: string[];
-  police_stations: string[];
-  io_names: string[];
-  pp_names: string[];
-  // Note: The 'result' field is static ["Conviction", "Acquittal"]
-  // and handled in the component, so it's not expected from this API.
-};
-
-// --- API Functions ---
-
-/**
- * Fetches the list of cases based on a search query and filters.
- * @param q - The main search term (for case number, accused, etc.)
- * @param filters - An object containing structured filters (district, court, etc.)
- * @returns A promise that resolves to an array of Case objects.
- */
-const getCases = async (
-  q: string,
-  filters: CaseFilterParams
-): Promise<Case[]> => {
-  const params = new URLSearchParams();
-
-  if (q) {
-    params.append("q", q);
-  }
-
-  (Object.keys(filters) as Array<keyof CaseFilterParams>).forEach((key) => {
-    const value = filters[key];
-    if (value) {
-      params.append(key, value);
-    }
-  });
-
-  const { data } = await apiClient.get("/cases/search", { params });
-  return data;
-};
-
-const getMetadataFields = async (): Promise<MetadataFields> => {
-  const fetchField = async (field: string) => {
-    try {
-      const { data } = await apiClient.get(`/metadata/distinct/${field}`);
-      return data;
-    } catch (error) {
-      console.error(`Failed to fetch metadata for ${field}:`, error);
-      return []; // Return empty array on error
-    }
-  };
-
-  const [
-    District,
-    Police_Station,
-    Court_Name,
-    Investigating_Officer,
-    Rank,
-    Crime_Type,
-    Result,
-    Sections_of_Law,
-    PP_Name,
-    Judge_Name,
-  ] = await Promise.all([
-    fetchField("District"),
-    fetchField("Police_Station"),
-    fetchField("Court_Name"),
-    fetchField("Investigating_Officer"),
-    fetchField("Rank"),
-    fetchField("Crime_Type"),
-    fetchField("Result"),
-    fetchField("Sections_of_Law"),
-    fetchField("PP_Name"),
-    fetchField("Judge_Name"),
-  ]);
-
-  return {
-    District,
-    Police_Station,
-    Court_Name,
-    Investigating_Officer,
-    Rank,
-    Crime_Type,
-    Result,
-    Sections_of_Law,
-    PP_Name,
-    Judge_Name,
-  };
-};
-
 /*
   --------------------
   React Query hooks (unified)
@@ -686,6 +584,49 @@ export const useGetMetadataFields = () => {
     queryFn: getMetadataFields,
     staleTime: 1000 * 60 * 5,
     refetchOnWindowFocus: false,
+  });
+};
+
+// --- User/Admin API Functions (NEW) ---
+
+/**
+ * Fetches all users for the admin panel.
+ */
+const getUsers = async (): Promise<User[]> => {
+  const { data } = await apiClient.get("/admin/users");
+  return data;
+};
+
+/**
+ * Creates a new user.
+ */
+const createUser = async (userData: UserCreateData): Promise<User> => {
+  const { data } = await apiClient.post("/admin/users", userData);
+  return data;
+};
+
+/**
+ * A hook to fetch all users for the admin panel.
+ */
+export const useGetUsers = () => {
+  return useQuery<User[], Error>({
+    queryKey: ["users"],
+    queryFn: getUsers,
+  });
+};
+
+/**
+ * A hook to create a new user.
+ * It invalidates the 'users' query on success to refetch the list.
+ */
+export const useCreateUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation<User, Error, UserCreateData>({
+    mutationFn: createUser,
+    onSuccess: () => {
+      // When a user is created, invalidate the 'users' query to refetch
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
   });
 };
 
@@ -732,5 +673,221 @@ export const useGetAccusedById = (id: string | null) => {
     queryKey: ["accusedProfile", id],
     queryFn: () => getAccusedById(id!),
     enabled: !!id,
+  });
+};
+
+export type UserCreateData = {
+  username: string;
+  full_name: string;
+  password: string;
+  role: UserRole;
+  district?: string;
+  police_station?: string;
+};
+
+// --- NEW: Types for Analytics ---
+
+export type KpiData = {
+  avg_investigation_days: number;
+  avg_trial_days: number;
+  avg_lifecycle_days: number;
+};
+
+export type ConvictionRateData = {
+  [key: string]: any; // e.g., "District": "Cuttack"
+  total_convictions: number;
+  total_acquittals: number;
+  total_cases: number;
+  conviction_rate: number;
+};
+
+export type TrendsData = {
+  year: number;
+  month: number;
+  total_convictions: number;
+  total_acquittals: number;
+  total_cases: number;
+};
+
+export type TrendsFilterParams = {
+  crime_type?: string;
+  gender?: string;
+  age_group?: string;
+};
+
+export type PerformanceData = {
+  officer_name?: string;
+  police_station?: string;
+  rank?: string;
+  total_convictions: number;
+  total_acquittals: number;
+  total_cases: number;
+  conviction_rate: number;
+};
+
+// --- API Functions ---
+
+const getCases = async (
+  q: string,
+  filters: CaseFilterParams
+): Promise<Case[]> => {
+  const params = new URLSearchParams();
+  if (q) {
+    params.append("q", q);
+  }
+  (Object.keys(filters) as Array<keyof CaseFilterParams>).forEach((key) => {
+    const value = filters[key];
+    if (value) {
+      params.append(key, value);
+    }
+  });
+  const { data } = await apiClient.get("/cases/search", { params });
+  return data;
+};
+
+const getMetadataFields = async (): Promise<MetadataFields> => {
+  const fetchField = async (field: string) => {
+    try {
+      const { data } = await apiClient.get(`/metadata/distinct/${field}`);
+      return data;
+    } catch (error) {
+      console.error(`Failed to fetch metadata for ${field}:`, error);
+      return [];
+    }
+  };
+
+  const [
+    District,
+    Police_Station,
+    Court_Name,
+    Investigating_Officer,
+    Rank,
+    Crime_Type,
+    Result,
+    Sections_of_Law,
+    PP_Name,
+    Judge_Name,
+    // --- NEW: Fetching new filter data ---
+    Gender,
+    Age_Group,
+  ] = await Promise.all([
+    fetchField("District"),
+    fetchField("Police_Station"),
+    fetchField("Court_Name"),
+    fetchField("Investigating_Officer"),
+    fetchField("Rank"),
+    fetchField("Crime_Type"),
+    fetchField("Result"),
+    fetchField("Sections_of_Law"),
+    fetchField("PP_Name"),
+    fetchField("Judge_Name"),
+  ]);
+
+  return {
+    District,
+    Police_Station,
+    Court_Name,
+    Investigating_Officer,
+    Rank,
+    Crime_Type,
+    Result,
+    Sections_of_Law,
+    PP_Name,
+    Judge_Name,
+    Gender,
+    Age_Group,
+  };
+};
+
+// --- NEW: Analytics API Functions ---
+const getKpis = async (): Promise<KpiData> => {
+  const { data } = await apiClient.get("/analytics/kpi/durations");
+  return data;
+};
+
+const getConvictionRate = async (
+  groupBy: string
+): Promise<ConvictionRateData[]> => {
+  const { data } = await apiClient.get(
+    `/analytics/conviction-rate?group_by=${groupBy}`
+  );
+  return data;
+};
+
+const getTrends = async (
+  filters: TrendsFilterParams
+): Promise<TrendsData[]> => {
+  const params = new URLSearchParams();
+  if (filters.crime_type) params.append("crime_type", filters.crime_type);
+  if (filters.gender) params.append("gender", filters.gender);
+  if (filters.age_group) params.append("age_group", filters.age_group);
+  const { data } = await apiClient.get("/analytics/trends", { params });
+  return data;
+};
+
+const getPerformanceRanking = async (
+  groupBy: string
+): Promise<PerformanceData[]> => {
+  const { data } = await apiClient.get(
+    `/analytics/performance/ranking?group_by=${groupBy}`
+  );
+  return data;
+};
+
+const getSankeyData = async (): Promise<SankeyData> => {
+  // This API endpoint `/analytics/chargesheet-comparison`
+  // is NOT in the backend file you provided.
+  // I am mocking it. You must add it to your backend.
+  console.warn("Mocking Sankey data. API endpoint not found in backend.");
+  return {
+    nodes: [
+      { id: "IPC 302" },
+      { id: "IPC 379" },
+      { id: "Conviction" },
+      { id: "Acquittal" },
+    ],
+    links: [
+      { source: "IPC 302", target: "Conviction", value: 20 },
+      { source: "IPC 302", target: "Acquittal", value: 10 },
+      { source: "IPC 379", target: "Conviction", value: 50 },
+      { source: "IPC 379", target: "Acquittal", value: 30 },
+    ],
+  };
+};
+
+// --- NEW: Analytics Hooks ---
+
+export const useGetKpis = () => {
+  return useQuery<KpiData, Error>({
+    queryKey: ["kpis"],
+    queryFn: getKpis,
+  });
+};
+
+export const useGetConvictionRate = (groupBy: string) => {
+  return useQuery<ConvictionRateData[], Error>({
+    queryKey: ["convictionRate", groupBy],
+    queryFn: () => getConvictionRate(groupBy),
+  });
+};
+
+export const useGetTrends = (filters: TrendsFilterParams) => {
+  return useQuery<TrendsData[], Error>({
+    queryKey: ["trends", filters],
+    queryFn: () => getTrends(filters),
+  });
+};
+
+export const useGetPerformanceRanking = (groupBy: string) => {
+  return useQuery<PerformanceData[], Error>({
+    queryKey: ["performanceRanking", groupBy],
+    queryFn: () => getPerformanceRanking(groupBy),
+  });
+};
+
+export const useGetSankeyData = () => {
+  return useQuery<SankeyData, Error>({
+    queryKey: ["sankeyData"],
+    queryFn: getSankeyData,
   });
 };
