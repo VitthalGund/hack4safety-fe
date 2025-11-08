@@ -1,95 +1,42 @@
-import { useAuthStore } from "./auth-store";
+import { useAuthStore } from "@/lib/auth-store";
+import axios from "axios";
 
-const API_BASE_URL =
-  process.env.NEXT_PUBLIC_API_URL || "http://localhost:8000/api/v1";
+const apiClient = axios.create({
+  baseURL: process.env.NEXT_PUBLIC_API_BASE_URL, // <-- FIXED
+  headers: {
+    "Content-Type": "application/json",
+  },
+});
 
-interface RequestOptions extends RequestInit {
-  skipAuth?: boolean;
-}
-
-export class APIClient {
-  private static instance: APIClient;
-  private baseURL: string;
-
-  constructor(baseURL: string = API_BASE_URL) {
-    this.baseURL = baseURL;
-  }
-
-  static getInstance(): APIClient {
-    if (!APIClient.instance) {
-      APIClient.instance = new APIClient();
+// Request interceptor to add the auth token
+apiClient.interceptors.request.use(
+  (config) => {
+    const token = useAuthStore.getState().token; // <-- Fixed to use useAuthStore
+    if (token) {
+      config.headers.Authorization = `Bearer ${token}`;
     }
-    return APIClient.instance;
+    return config;
+  },
+  (error) => {
+    return Promise.reject(error);
   }
+);
 
-  private async request<T>(
-    endpoint: string,
-    options: RequestOptions = {}
-  ): Promise<T> {
-    const { skipAuth = false, ...fetchOptions } = options;
-    const url = `${this.baseURL}${endpoint}`;
-
-    const headers: Record<string, string> = {
-      "Content-Type": "application/json",
-      ...((fetchOptions.headers as Record<string, string>) || {}),
-    };
-
-    if (!skipAuth) {
-      const token = useAuthStore.getState().token;
-      if (token) {
-        headers["Authorization"] = `Bearer ${token}`;
+// Response interceptor for error handling (e.g., 401 Unauthorized)
+apiClient.interceptors.response.use(
+  (response) => response,
+  (error) => {
+    if (error.response && error.response.status === 401) {
+      // Token is invalid or expired
+      console.error("Unauthorized request, logging out.");
+      useAuthStore.getState().logout(); // <-- Fixed to use useAuthStore
+      // Optionally redirect to login
+      if (typeof window !== "undefined") {
+        window.location.href = "/auth/login";
       }
     }
-
-    const response = await fetch(url, {
-      ...fetchOptions,
-      headers,
-    });
-
-    if (!response.ok) {
-      if (response.status === 401) {
-        useAuthStore.getState().logout();
-      }
-      const error = await response.json().catch(() => ({}));
-      throw new Error(
-        error.message || `Request failed with status ${response.status}`
-      );
-    }
-
-    return response.json();
+    return Promise.reject(error);
   }
+);
 
-  async get<T>(endpoint: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: "GET" });
-  }
-
-  async post<T>(
-    endpoint: string,
-    data?: unknown,
-    options?: RequestOptions
-  ): Promise<T> {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: "POST",
-      body: data ? JSON.stringify(data) : undefined,
-    });
-  }
-
-  async put<T>(
-    endpoint: string,
-    data?: unknown,
-    options?: RequestOptions
-  ): Promise<T> {
-    return this.request<T>(endpoint, {
-      ...options,
-      method: "PUT",
-      body: data ? JSON.stringify(data) : undefined,
-    });
-  }
-
-  async delete<T>(endpoint: string, options?: RequestOptions): Promise<T> {
-    return this.request<T>(endpoint, { ...options, method: "DELETE" });
-  }
-}
-
-export const apiClient = APIClient.getInstance();
+export default apiClient;

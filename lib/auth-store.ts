@@ -1,99 +1,121 @@
 import { create } from "zustand";
-import { persist } from "zustand/middleware";
+import { persist, createJSONStorage } from "zustand/middleware";
+import apiClient from "./api-client";
 
-export type UserRole = "super_admin" | "state_police" | "investigating_officer";
-
-export interface User {
+interface User {
   id: string;
-  email: string;
   name: string;
-  role: UserRole;
-  district?: string;
-  avatar?: string;
+  email: string;
+  role: string;
+  status: string;
+  last_login: string;
 }
 
-export interface AuthState {
-  user: User | null;
+// Define the UserRole enum to match the backend
+export enum UserRole {
+  ADMIN = "ADMIN",
+  SP = "SP",
+  SDPO = "SDPO",
+  IIC = "IIC",
+  COURT_LIAISON = "COURT_LIAISON",
+}
+
+interface AuthState {
   token: string | null;
+  user: User | null;
   isAuthenticated: boolean;
   isLoading: boolean;
   error: string | null;
-  login: (email: string, password: string) => Promise<void>;
+  login: (username: string, password: string) => Promise<void>;
   logout: () => void;
-  setUser: (user: User | null) => void;
-  setToken: (token: string | null) => void;
+  setUser: () => Promise<void>;
   clearError: () => void;
 }
 
 export const useAuthStore = create<AuthState>()(
   persist(
     (set, get) => ({
-      user: null,
       token: null,
+      user: null,
       isAuthenticated: false,
       isLoading: false,
       error: null,
 
-      login: async (email: string, password: string) => {
+      clearError: () => set({ error: null }),
+
+      login: async (username, password) => {
         set({ isLoading: true, error: null });
         try {
-          const response = await fetch(
-            "http://localhost:8000/api/v1/auth/token",
+          // --- FIX: Create form data (URLSearchParams) ---
+          const params = new URLSearchParams();
+          params.append("username", username);
+          params.append("password", password);
+
+          // --- FIX: Send as 'application/x-www-form-urlencoded' ---
+          const response = await apiClient.post<{ access_token: string }>(
+            "/auth/token",
+            params, // Send params as data
             {
-              method: "POST",
-              headers: { "Content-Type": "application/json" },
-              body: JSON.stringify({ email, password }),
+              headers: {
+                "Content-Type": "application/x-www-form-urlencoded",
+              },
             }
           );
 
-          if (!response.ok) {
-            const data = await response.json();
-            throw new Error(data.message || "Login failed");
-          }
+          const token = response.data.access_token;
+          set({ token, isAuthenticated: true });
 
-          const data = await response.json();
-          set({
-            user: data.user,
-            token: data.token,
-            isAuthenticated: true,
-            isLoading: false,
-          });
-        } catch (error) {
-          const message =
-            error instanceof Error ? error.message : "Login failed";
-          set({ error: message, isLoading: false });
+          // After setting the token, fetch the user details
+          await get().setUser();
+          set({ isLoading: false });
+        } catch (error: any) {
+          console.error("Login failed:", error);
+          const detail =
+            error.response?.data?.detail || "Invalid username or password.";
+          set({ isLoading: false, error: detail });
+          // Re-throw the error to be handled by the UI
           throw error;
         }
       },
 
       logout: () => {
         set({
-          user: null,
           token: null,
+          user: null,
           isAuthenticated: false,
           error: null,
+          isLoading: false,
         });
       },
 
-      setUser: (user: User | null) => {
-        set({ user, isAuthenticated: !!user });
-      },
-
-      setToken: (token: string | null) => {
-        set({ token });
-      },
-
-      clearError: () => {
-        set({ error: null });
+      setUser: async () => {
+        if (!get().token) {
+          console.error("setUser called without a token.");
+          return;
+        }
+        try {
+          const response = await apiClient.get<User>("/auth/users/me");
+          set({ user: response.data });
+        } catch (error) {
+          console.error("Failed to fetch user data:", error);
+          // If we can't get user, log out
+          get().logout();
+        }
       },
     }),
     {
-      name: "auth-store",
-      partialize: (state) => ({
-        user: state.user,
-        token: state.token,
-        isAuthenticated: state.isAuthenticated,
-      }),
+      name: "auth-storage",
+      storage: createJSONStorage(() => localStorage),
     }
   )
 );
+
+// This re-hydrates the user info on app load if a token is present
+export const initializeAuth = () => {
+  const { token, user, setUser } = useAuthStore.getState();
+  if (token && !user) {
+    setUser().catch((error) => {
+      console.error("Failed to re-hydrate user on init:", error);
+    });
+  }
+};

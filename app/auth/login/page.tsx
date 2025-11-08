@@ -1,7 +1,6 @@
 "use client";
 
 import type React from "react";
-
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
@@ -16,7 +15,9 @@ import { AlertCircle, Eye, EyeOff, Loader2, Shield } from "lucide-react";
 export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading, error, clearError } = useAuth();
-  const [email, setEmail] = useState("");
+
+  // --- FIX: Changed 'email' to 'username' ---
+  const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
 
@@ -24,12 +25,14 @@ export default function LoginPage() {
     e.preventDefault();
     clearError();
 
-    if (!email || !password) {
+    // --- FIX: Check for 'username' ---
+    if (!username || !password) {
       return;
     }
 
     try {
-      await login(email, password);
+      // --- FIX: Pass 'username' to login ---
+      await login(username, password);
       router.push("/app/dashboard");
     } catch (err) {
       console.log("[v0] Login error:", err);
@@ -112,14 +115,15 @@ export default function LoginPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
+                {/* --- FIX: Label changed to Username --- */}
                 <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
-                  Email Address
+                  Username
                 </label>
                 <Input
                   type="text"
-                  placeholder="user"
-                  value={email}
-                  onChange={(e) => setEmail(e.target.value)}
+                  placeholder="e.g. admin_user" // <-- FIX: Updated placeholder
+                  value={username} // <-- FIX: Changed state var
+                  onChange={(e) => setUsername(e.target.value)} // <-- FIX: Changed state setter
                   disabled={isLoading}
                   className="h-11 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-400"
                 />
@@ -191,7 +195,7 @@ export default function LoginPage() {
               >
                 <Button
                   type="submit"
-                  disabled={isLoading || !email || !password}
+                  disabled={isLoading || !username || !password} // <-- FIX: Check 'username'
                   className="w-full h-11 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-medium rounded-lg transition-all duration-200"
                 >
                   {isLoading ? (
@@ -206,7 +210,7 @@ export default function LoginPage() {
               </motion.div>
             </form>
 
-            {/* Demo credentials */}
+            {/* --- FIX: Updated Demo credentials to match backend --- */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -218,10 +222,10 @@ export default function LoginPage() {
               </p>
               <div className="space-y-1 text-xs text-blue-800 dark:text-blue-300">
                 <p>
-                  <strong>Email:</strong> admin@example.com
+                  <strong>Username:</strong> admin_user
                 </p>
                 <p>
-                  <strong>Password:</strong> demo123
+                  <strong>Password:</strong> admin_password123
                 </p>
               </div>
             </motion.div>
