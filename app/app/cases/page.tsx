@@ -10,14 +10,20 @@ import { apiService } from "@/lib/api-services";
 import useSWR from "swr";
 
 interface Case {
-  id: string;
-  case_number: string;
   fir_number: string;
   status: string;
   accused_count: number;
+  Accused_Name: string;
   sections_charged: string[];
   investigation_start: string;
   created_at: string;
+  Case_Number: string;
+  District: string;
+  Investigating_Officer: string;
+  Police_Station: string;
+  Result: string;
+  Sections_of_Law: string;
+  _id: string;
 }
 
 export default function CasesPage() {

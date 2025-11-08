@@ -1,5 +1,5 @@
 import { useAuthStore } from "@/lib/auth-store";
-import axios, { AxiosError } from "axios"; // Import AxiosError
+import axios, { AxiosError } from "axios";
 
 const apiClient = axios.create({
   baseURL: process.env.NEXT_PUBLIC_API_BASE_URL,

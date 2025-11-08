@@ -12,10 +12,19 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { fetchPerformanceRankings, RankingData } from "@/lib/api-services";
-import { AlertCircle, Loader2 } from "lucide-react";
+import {
+  AlertCircle,
+  Loader2,
+  Users, // <-- 1. Import icons
+  Building,
+  ChevronLeft,
+  ChevronRight,
+} from "lucide-react";
 import PersonnelScorecardModal from "@/components/dashboard/personnel-scorecard-modal";
+import { Button } from "@/components/ui/button"; // <-- 2. Import Button
 
 type GroupBy = "Investigating_Officer" | "Police_Station";
+const PAGE_LIMIT = 5; // <-- 3. Define page size
 
 export default function PerformanceRankings() {
   const [data, setData] = useState<RankingData[]>([]);
@@ -23,15 +32,22 @@ export default function PerformanceRankings() {
   const [error, setError] = useState<string | null>(null);
   const [groupBy, setGroupBy] = useState<GroupBy>("Investigating_Officer");
 
-  // --- FIX: Add state for the modal ---
   const [selectedOfficer, setSelectedOfficer] = useState<string | null>(null);
+
+  // --- 4. Add state for pagination ---
+  const [skip, setSkip] = useState(0);
 
   useEffect(() => {
     const loadData = async () => {
       try {
         setLoading(true);
         setError(null);
-        const result = await fetchPerformanceRankings(groupBy);
+        // --- 5. Pass pagination state to API call ---
+        const result = await fetchPerformanceRankings(
+          groupBy,
+          skip,
+          PAGE_LIMIT
+        );
         setData(result);
       } catch (err) {
         console.error("Failed to load performance rankings:", err);
@@ -42,9 +58,22 @@ export default function PerformanceRankings() {
     };
 
     loadData();
-  }, [groupBy]);
+  }, [groupBy, skip]); // --- 6. Re-run effect when skip changes ---
+
+  // --- 7. Add pagination handler functions ---
+  const handleNext = () => {
+    // Only allow next if we received a full page of results
+    if (data.length === PAGE_LIMIT) {
+      setSkip(skip + PAGE_LIMIT);
+    }
+  };
+
+  const handlePrev = () => {
+    setSkip(Math.max(0, skip - PAGE_LIMIT));
+  };
 
   const chartData = data;
+  const isOfficer = groupBy === "Investigating_Officer";
 
   if (error) {
     return (
@@ -68,6 +97,7 @@ export default function PerformanceRankings() {
           <h2 className="text-2xl font-bold text-slate-900 dark:text-white">
             Top Performers
           </h2>
+          {/* --- 8. Use new Button component --- */}
           <div className="flex gap-2">
             {(["Investigating_Officer", "Police_Station"] as const).map(
               (opt) => (
@@ -93,47 +123,69 @@ export default function PerformanceRankings() {
             <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
           </div>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Rank</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Unit / Rank</TableHead>
-                <TableHead>Total Cases</TableHead>
-                <TableHead>Conviction Rate</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {chartData.map((item) => (
-                // --- FIX: Make row clickable if it's an officer ---
-                <TableRow
-                  key={item.name}
-                  className={
-                    groupBy === "Investigating_Officer"
-                      ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
-                      : ""
-                  }
-                  onClick={() => {
-                    if (groupBy === "Investigating_Officer") {
-                      setSelectedOfficer(item.name);
-                    }
-                  }}
-                >
-                  <TableCell className="font-medium">{item.rank}</TableCell>
-                  <TableCell>{item.name}</TableCell>
-                  <TableCell>{item.unit}</TableCell>
-                  <TableCell>{item.totalCases}</TableCell>
-                  <TableCell className="font-semibold text-indigo-600 dark:text-indigo-400">
-                    {item.convictionRate.toFixed(1)}%
-                  </TableCell>
+          <>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Rank</TableHead>
+                  <TableHead>Name</TableHead>
+                  <TableHead>Unit / Rank</TableHead>
+                  <TableHead>Total Cases</TableHead>
+                  <TableHead>Conviction Rate</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {chartData.map((item) => (
+                  <TableRow
+                    key={item.name}
+                    className={
+                      isOfficer
+                        ? "cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                        : ""
+                    }
+                    onClick={() => {
+                      if (isOfficer) {
+                        setSelectedOfficer(item.name);
+                      }
+                    }}
+                  >
+                    <TableCell className="font-medium">{item.rank}</TableCell>
+                    <TableCell>{item.name}</TableCell>
+                    <TableCell>{item.unit}</TableCell>
+                    <TableCell>{item.totalCases}</TableCell>
+                    <TableCell className="font-semibold text-indigo-600 dark:text-indigo-400">
+                      {item.convictionRate.toFixed(1)}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* --- 10. Add Pagination Controls --- */}
+            <div className="p-4 flex items-center justify-end gap-2 border-t dark:border-slate-700">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrev}
+                disabled={skip === 0 || loading}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNext}
+                disabled={data.length < PAGE_LIMIT || loading}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </>
         )}
       </Card>
 
-      {/* --- FIX: Add the new modal component --- */}
       <PersonnelScorecardModal
         officerName={selectedOfficer}
         isOpen={!!selectedOfficer}

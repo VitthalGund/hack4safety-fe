@@ -67,7 +67,7 @@ export default function CaseList() {
     // --- FIX: Debounce search input ---
     const timer = setTimeout(() => {
       loadData();
-    }, 500); // Wait 500ms after user stops typing
+    }, 1000); // Wait 500ms after user stops typing
 
     return () => clearTimeout(timer); // Clear the timer if user types again
   }, [searchTerm]); // Re-run effect when searchTerm changes

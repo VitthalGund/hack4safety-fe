@@ -76,7 +76,7 @@ export default function CaseDetailModal({
 
   return (
     <Dialog open={isOpen} onOpenChange={handleClose}>
-      <DialogContent className="max-w-3xl h-[80vh] flex flex-col">
+      <DialogContent className="min-w-5xl h-[80vh] flex flex-col">
         <DialogHeader>
           <DialogTitle>
             Case Details: {caseDetails?.Case_Number ?? "Loading..."}
@@ -139,7 +139,7 @@ export default function CaseDetailModal({
               <div className="mt-4">
                 <h4 className="text-lg font-semibold text-slate-900 dark:text-white mb-2 flex items-center">
                   <Sparkles className="w-4 h-4 mr-2 text-indigo-500" />
-                  AI Generated Summary
+                  Summary
                 </h4>
                 <div className="prose prose-sm dark:prose-invert max-w-none bg-slate-50 dark:bg-slate-800 rounded-lg p-4">
                   {/* --- FIX: Directly use the Summary field from caseDetails --- */}

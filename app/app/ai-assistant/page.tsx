@@ -90,12 +90,8 @@ export default function AiAssistantPage() {
       transition={{ duration: 0.5 }}
       className="h-full flex flex-col"
     >
-      <h1 className="text-3xl font-bold text-slate-900 dark:text-white mb-6">
-        AI Assistant
-      </h1>
-
       <Card className="flex-grow flex flex-col dark:border-slate-700 dark:bg-slate-800">
-        <CardHeader className="flex flex-row items-center justify-between border-b dark:border-slate-600">
+        <CardHeader className="flex flex-row items-center justify-between border-b rounded-none dark:border-slate-600">
           <CardTitle className="flex items-center gap-2">
             {botType === "cases" ? (
               <>
