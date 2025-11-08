@@ -1,6 +1,6 @@
 import apiClient from "./api-client";
 
-// Define the shape of the data coming from the BACKEND
+// --- TrendData (From previous step) ---
 interface TrendApiResponse {
   year: number;
   month: number;
@@ -8,40 +8,25 @@ interface TrendApiResponse {
   total_acquittals: number;
   total_cases: number;
 }
-
-// Define the shape the FRONTEND CHART expects
 export interface TrendData {
-  date: string; // e.g., "Jan 2024"
+  date: string;
   Convicted: number;
   Acquitted: number;
   "Total Cases": number;
 }
-
-/**
- * Fetches trends data from the backend and transforms it for the chart.
- */
 export const fetchTrends = async (
   period: "monthly" | "yearly"
 ): Promise<TrendData[]> => {
-  // TODO: The backend /analytics/trends endpoint doesn't currently use the 'period' param.
-  // We will ignore it for now, but in a real app, you would pass this to the API.
-  // Example: const response = await apiClient.get("/analytics/trends", { params: { period } });
-
   const response = await apiClient.get<TrendApiResponse[]>("/analytics/trends");
-
   if (!Array.isArray(response.data)) {
     throw new Error("Invalid data format received from server.");
   }
-
-  // --- FIX: Transform backend data into the shape the chart expects ---
   const transformedData: TrendData[] = response.data.map((item) => {
-    // Create a date string. JS months are 0-indexed, so -1.
     const date = new Date(item.year, item.month - 1);
     const dateString = date.toLocaleDateString("en-US", {
       month: "short",
       year: "numeric",
     });
-
     return {
       date: dateString,
       Convicted: item.total_convictions,
@@ -49,7 +34,6 @@ export const fetchTrends = async (
       "Total Cases": item.total_cases,
     };
   });
-
   return transformedData;
 };
 
@@ -233,3 +217,66 @@ export async function markAlertAsRead(alertId: string) {
 export async function fetchInsights() {
   return apiService.fetchInsights();
 }
+
+// 1. Define the shape the FRONTEND component expects
+export interface RankingData {
+  rank: number;
+  name: string;
+  unit: string;
+  convictionRate: number;
+  totalCases: number;
+}
+
+// 2. Define the shapes the BACKEND provides
+interface OfficerRankingResponse {
+  officer_name: string;
+  rank: string; // This is the 'unit' for an officer
+  total_convictions: number;
+  total_acquittals: number;
+  total_cases: number;
+  conviction_rate: number;
+}
+
+interface StationRankingResponse {
+  police_station: string; // This is the 'name' for a station
+  // Note: Backend doesn't provide a 'unit' (like District) here.
+  total_convictions: number;
+  total_acquittals: number;
+  total_cases: number;
+  conviction_rate: number;
+}
+
+// 3. Implement the API service function
+export const fetchPerformanceRankings = async (
+  groupBy: "Investigating_Officer" | "Police_Station"
+): Promise<RankingData[]> => {
+  const response = await apiClient.get<
+    OfficerRankingResponse[] | StationRankingResponse[]
+  >("/analytics/performance/ranking", {
+    params: { group_by: groupBy },
+  });
+
+  if (!Array.isArray(response.data)) {
+    throw new Error("Invalid data format for rankings.");
+  }
+
+  // 4. Transform the data to match the component's expected shape
+  if (groupBy === "Investigating_Officer") {
+    return (response.data as OfficerRankingResponse[]).map((item, index) => ({
+      rank: index + 1,
+      name: item.officer_name,
+      unit: item.rank, // For officers, 'unit' is their rank (e.g., "Inspector")
+      convictionRate: item.conviction_rate * 100, // Convert to percentage
+      totalCases: item.total_cases,
+    }));
+  } else {
+    // groupBy === "Police_Station"
+    return (response.data as StationRankingResponse[]).map((item, index) => ({
+      rank: index + 1,
+      name: item.police_station,
+      unit: "N/A", // Backend doesn't provide District, so we send "N/A"
+      convictionRate: item.conviction_rate * 100, // Convert to percentage
+      totalCases: item.total_cases,
+    }));
+  }
+};

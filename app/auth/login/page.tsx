@@ -191,7 +191,7 @@ export default function LoginPage() {
               >
                 <Button
                   type="submit"
-                  // disabled={isLoading || !username || !password}
+                  disabled={isLoading || !username || !password}
                   // --- FIX: Added disabled:opacity-50 and disabled:cursor-not-allowed ---
                   className="w-full h-11 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
