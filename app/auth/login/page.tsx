@@ -16,7 +16,6 @@ export default function LoginPage() {
   const router = useRouter();
   const { login, isLoading, error, clearError } = useAuth();
 
-  // --- FIX: Changed 'email' to 'username' ---
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -25,13 +24,11 @@ export default function LoginPage() {
     e.preventDefault();
     clearError();
 
-    // --- FIX: Check for 'username' ---
     if (!username || !password) {
       return;
     }
 
     try {
-      // --- FIX: Pass 'username' to login ---
       await login(username, password);
       router.push("/app/dashboard");
     } catch (err) {
@@ -115,15 +112,14 @@ export default function LoginPage() {
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: 0.1 }}
               >
-                {/* --- FIX: Label changed to Username --- */}
                 <label className="block text-sm font-medium text-slate-900 dark:text-white mb-2">
                   Username
                 </label>
                 <Input
                   type="text"
-                  placeholder="e.g. admin_user" // <-- FIX: Updated placeholder
-                  value={username} // <-- FIX: Changed state var
-                  onChange={(e) => setUsername(e.target.value)} // <-- FIX: Changed state setter
+                  placeholder="e.g. admin_user"
+                  value={username}
+                  onChange={(e) => setUsername(e.target.value)}
                   disabled={isLoading}
                   className="h-11 bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-700 focus:border-indigo-500 dark:focus:border-indigo-400"
                 />
@@ -195,8 +191,9 @@ export default function LoginPage() {
               >
                 <Button
                   type="submit"
-                  disabled={isLoading || !username || !password} // <-- FIX: Check 'username'
-                  className="w-full h-11 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-medium rounded-lg transition-all duration-200"
+                  disabled={isLoading || !username || !password}
+                  // --- FIX: Added disabled:opacity-50 and disabled:cursor-not-allowed ---
+                  className="w-full h-11 bg-gradient-to-r from-indigo-600 to-indigo-500 hover:from-indigo-700 hover:to-indigo-600 text-white font-medium rounded-lg transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   {isLoading ? (
                     <>
@@ -210,7 +207,6 @@ export default function LoginPage() {
               </motion.div>
             </form>
 
-            {/* --- FIX: Updated Demo credentials to match backend --- */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
@@ -230,7 +226,6 @@ export default function LoginPage() {
               </div>
             </motion.div>
 
-            {/* Footer */}
             <motion.div
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
