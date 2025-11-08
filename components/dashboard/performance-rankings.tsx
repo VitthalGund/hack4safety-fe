@@ -14,7 +14,7 @@ import {
 import { fetchPerformanceRankings, RankingData } from "@/lib/api-services";
 import { AlertCircle, Loader2 } from "lucide-react";
 // --- FIX: Import the new modal ---
-import PersonnelScorecardModal from "./personnel-scorecard-modal";
+import PersonnelScorecardModal from "@/components/dashboard/personnel-scorecard-modal";
 
 type GroupBy = "Investigating_Officer" | "Police_Station";
 
