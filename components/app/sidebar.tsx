@@ -18,6 +18,7 @@ import {
   Menu,
   X,
   Shield,
+  FileDown,
 } from "lucide-react";
 import { UserRole } from "@/lib/auth-store"; // Import UserRole
 
@@ -52,6 +53,7 @@ const sidebarItems = [
     href: "/app/ai-assistant",
     icon: Brain,
   },
+  { href: "/app/reports", label: "Reports", icon: FileDown },
 ];
 
 const adminItems = [

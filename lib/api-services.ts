@@ -1,5 +1,3 @@
-// lib/api-services.ts
-
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import apiClient from "./api-client";
 import type { Case } from "@/types/case";
@@ -79,6 +77,7 @@ export type MetadataFields = {
   Term_Unit: string[];
 };
 
+// Raw response from /trends
 interface TrendApiResponse {
   year: number;
   month: number;
@@ -86,9 +85,10 @@ interface TrendApiResponse {
   total_acquittals: number;
   total_cases: number;
 }
+// Transformed data for the chart
 export interface TrendData {
   date: string;
-  Convicted: number; // "Convicted" is the key used by the chart
+  Convicted: number;
   Acquitted: number;
   "Total Cases": number;
 }
@@ -112,13 +112,11 @@ interface StationRankingResponse {
   total_cases: number;
   conviction_rate: number;
 }
-// --- FEATURE: Added Unit response type ---
 interface UnitRankingResponse {
   unit_name: string;
   total_cases: number;
   conviction_rate: number;
 }
-// --- FEATURE: Added Acquittal chart type ---
 export interface AcquittalChartData {
   name: string;
   AcquittalRate: number;
@@ -187,7 +185,7 @@ export interface PersonnelScorecard {
 
 /*
   --------------------
-  apiService (collection of endpoints)
+  API FUNCTIONS
   --------------------
 */
 // This object seems fine, no changes needed.
@@ -635,102 +633,6 @@ export async function askCaseBot(query: string, model: string = "gemini") {
   --------------------
 */
 // --- FIX: Added skip and limit to useGetCases ---
-export const useGetCases = (
-  q: string,
-  filters: CaseFilterParams,
-  skip: number,
-  limit: number
-) => {
-  return useQuery<Case[], Error>({
-    queryKey: ["cases", q, filters, skip, limit],
-    queryFn: () => getCases(q, filters, skip, limit),
-  });
-};
-
-export const useGetMetadataFields = () => {
-  return useQuery<MetadataFields, Error>({
-    queryKey: ["metadataFields"],
-    queryFn: getMetadataFields,
-    staleTime: 1000 * 60 * 5,
-    refetchOnWindowFocus: false,
-  });
-};
-
-// ... (User/Admin hooks are fine) ...
-const getUsers = async (): Promise<User[]> => {
-  const { data } = await apiClient.get("/admin/users");
-  return data;
-};
-const createUser = async (userData: UserCreateData): Promise<User> => {
-  const { data } = await apiClient.post("/admin/users", userData);
-  return data;
-};
-export const useGetUsers = () => {
-  return useQuery<User[], Error>({
-    queryKey: ["users"],
-    queryFn: getUsers,
-  });
-};
-export const useCreateUser = () => {
-  const queryClient = useQueryClient();
-  return useMutation<User, Error, UserCreateData>({
-    mutationFn: createUser,
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["users"] });
-    },
-  });
-};
-
-// ... (Accused 360 hooks are fine) ...
-export type AccusedSearchResult = {
-  id: string;
-  name: string;
-  alias: string;
-  case_count: number;
-};
-
-export type AccusedProfile = {
-  id: string;
-  name: string;
-  aliases: string[];
-  is_habitual_offender: boolean;
-  case_history: Case[];
-};
-
-const searchAccused = async (q: string): Promise<AccusedSearchResult[]> => {
-  if (!q) return [];
-  const { data } = await apiClient.get(`/accused/search?q=${q}`);
-  return data;
-};
-
-const getAccusedById = async (id: string): Promise<AccusedProfile> => {
-  const { data } = await apiClient.get(`/accused/${id}`);
-  return data;
-};
-
-export const useSearchAccused = (q: string) => {
-  return useQuery<AccusedSearchResult[], Error>({
-    queryKey: ["accusedSearch", q],
-    queryFn: () => searchAccused(q),
-  });
-};
-
-export const useGetAccusedById = (id: string | null) => {
-  return useQuery<AccusedProfile, Error>({
-    queryKey: ["accusedProfile", id],
-    queryFn: () => getAccusedById(id!),
-    enabled: !!id,
-  });
-};
-
-export type UserCreateData = {
-  username: string;
-  full_name: string;
-  password: string;
-  role: UserRole;
-  district?: string;
-  police_station?: string;
-};
 
 // --- Analytics Types & Functions ---
 
@@ -777,9 +679,8 @@ export type PerformanceData = {
 const getCases = async (
   q: string,
   filters: CaseFilterParams,
-  // --- FIX: Added skip and limit ---
   skip: number = 0,
-  limit: number = 5
+  limit: number = 10
 ): Promise<Case[]> => {
   const params = new URLSearchParams();
   if (q) params.append("q", q);
@@ -788,7 +689,7 @@ const getCases = async (
   params.append("limit", limit.toString());
 
   (Object.keys(filters) as Array<keyof CaseFilterParams>).forEach((key) => {
-    const value = filters[key];
+    const value = filters[key as keyof CaseFilterParams];
     if (value) {
       params.append(key, value);
     }
@@ -801,7 +702,10 @@ const getMetadataFields = async (): Promise<MetadataFields> => {
   const fetchField = async (field: string) => {
     try {
       const { data } = await apiClient.get(`/metadata/distinct/${field}`);
-      return data;
+      // --- FIX: Filter out null or empty strings ---
+      return (
+        data.filter((item: string | null) => item && item.trim() !== "") || []
+      );
     } catch (error) {
       console.error(`Failed to fetch metadata for ${field}:`, error);
       return [];
@@ -855,9 +759,25 @@ const getMetadataFields = async (): Promise<MetadataFields> => {
   };
 };
 
-const getKpis = async (): Promise<KpiData> => {
+// --- (Other API functions: getKpis, getConvictionRate, etc. remain here) ---
+const getKpis = async (): Promise<KPIData> => {
   const { data } = await apiClient.get("/analytics/kpi/durations");
-  return data;
+  // This is a simplified fetch, real KPIs should be aggregated
+  const kpiData = {
+    totalCases: data.total_cases || 0, // Assuming kpi/durations returns this
+    avgLifecycleDays: Math.round(data.avg_lifecycle_days || 0),
+    avgInvestigationDays: Math.round(data.avg_investigation_days || 0),
+    avgTrialDays: Math.round(data.avg_trial_days || 0),
+  };
+  // We need to fetch total cases separately
+  const rateResponse = await apiClient.get(
+    "/analytics/conviction-rate?group_by=District"
+  );
+  kpiData.totalCases = rateResponse.data.reduce(
+    (acc: number, curr: any) => acc + curr.total_cases,
+    0
+  );
+  return kpiData;
 };
 
 const getConvictionRate = async (
@@ -869,22 +789,25 @@ const getConvictionRate = async (
   return data;
 };
 
-// --- FIX: Updated getTrends function ---
-const getTrends = async (
-  filters: TrendsFilterParams
-): Promise<TrendsData[]> => {
+const getTrends = async (filters: TrendsFilterParams): Promise<TrendData[]> => {
   const params = new URLSearchParams();
   if (filters.crime_type) params.append("crime_type", filters.crime_type);
   if (filters.year) params.append("year", filters.year.toString());
   if (filters.month) params.append("month", filters.month.toString());
 
-  const { data } = await apiClient.get("/analytics/trends", { params });
+  const { data } = await apiClient.get<TrendApiResponse[]>(
+    "/analytics/trends",
+    { params }
+  );
+
+  if (!Array.isArray(data)) {
+    throw new Error("Invalid data format received from server.");
+  }
 
   // Transform data for the chart
-  return data.map((item: TrendsData) => {
+  return data.map((item: TrendApiResponse) => {
     const date = new Date(item.year, item.month - 1);
     return {
-      ...item,
       date: date.toLocaleDateString("en-US", {
         month: "short",
         year: "2-digit",
@@ -897,22 +820,196 @@ const getTrends = async (
 };
 
 const getPerformanceRanking = async (
-  groupBy: string
-): Promise<PerformanceData[]> => {
-  const { data } = await apiClient.get(
-    `/analytics/performance/ranking?group_by=${groupBy}`
+  groupBy: string,
+  skip: number,
+  limit: number
+): Promise<RankingData[]> => {
+  const { data } = await apiClient.get<
+    (OfficerRankingResponse | StationRankingResponse | UnitRankingResponse)[]
+  >(
+    `/analytics/performance/ranking?group_by=${groupBy}&skip=${skip}&limit=${limit}`
   );
-  return data;
+
+  if (groupBy === "Investigating_Officer") {
+    return (data as OfficerRankingResponse[]).map((item, index) => ({
+      rank: skip + index + 1,
+      name: item.officer_name,
+      unit: item.rank,
+      convictionRate: (item.conviction_rate || 0) * 100,
+      totalCases: item.total_cases,
+    }));
+  } else if (groupBy === "Police_Station") {
+    return (data as StationRankingResponse[]).map((item, index) => ({
+      rank: skip + index + 1,
+      name: item.police_station,
+      unit: "N/A",
+      convictionRate: (item.conviction_rate || 0) * 100,
+      totalCases: item.total_cases,
+    }));
+  } else {
+    // Term_Unit
+    return (data as UnitRankingResponse[]).map((item, index) => ({
+      rank: skip + index + 1,
+      name: item.unit_name,
+      unit: "Unit",
+      convictionRate: (item.conviction_rate || 0) * 100,
+      totalCases: item.total_cases,
+    }));
+  }
+};
+
+// --- 4. GET ACQUITTAL RATE ---
+const getAcquittalRate = async (
+  groupBy: string
+): Promise<AcquittalChartData[]> => {
+  const { data } = await apiClient.get<RateResponse[]>(
+    "/analytics/acquittal-rate",
+    {
+      params: { group_by: groupBy },
+    }
+  );
+  if (!Array.isArray(data)) {
+    throw new Error("Invalid data format for acquittal rate.");
+  }
+  return data.map((item) => ({
+    name: item[groupBy] || "Uncategorized",
+    AcquittalRate: parseFloat(((item.acquittal_rate || 0) * 100).toFixed(1)),
+  }));
 };
 
 const getSankeyData = async (): Promise<SankeyData> => {
-  return fetchChargesheetComparison();
+  const { data } = await apiClient.get<ChargesheetResponse>(
+    "/analytics/chargesheet-comparison"
+  );
+  if (!data || !Array.isArray(data.by_group)) {
+    throw new Error("Invalid data for chargesheet comparison.");
+  }
+  const backendData = data.by_group;
+  const nodes: SankeyNode[] = [
+    { id: "Total Cases" },
+    { id: "Chargesheeted" },
+    { id: "Not Chargesheeted" },
+    { id: "Convicted" },
+    { id: "Acquitted" },
+  ];
+  const cs_data = backendData.find((d) => d._id === 1) ?? {
+    total_convictions: 0,
+    total_acquittals: 0,
+  };
+  const no_cs_data = backendData.find((d) => d._id === 0) ?? {
+    total_convictions: 0,
+    total_acquittals: 0,
+  };
+  const total_chargesheeted =
+    (cs_data.total_convictions || 0) + (cs_data.total_acquittals || 0);
+  const total_not_chargesheeted =
+    (no_cs_data.total_convictions || 0) + (no_cs_data.total_acquittals || 0);
+  const links: SankeyLink[] = [
+    {
+      source: "Total Cases",
+      target: "Chargesheeted",
+      value: total_chargesheeted,
+    },
+    {
+      source: "Total Cases",
+      target: "Not Chargesheeted",
+      value: total_not_chargesheeted,
+    },
+    {
+      source: "Chargesheeted",
+      target: "Convicted",
+      value: cs_data.total_convictions,
+    },
+    {
+      source: "Chargesheeted",
+      target: "Acquitted",
+      value: cs_data.total_acquittals,
+    },
+    {
+      source: "Not Chargesheeted",
+      target: "Convicted",
+      value: no_cs_data.total_convictions,
+    },
+    {
+      source: "Not Chargesheeted",
+      target: "Acquitted",
+      value: no_cs_data.total_acquittals,
+    },
+  ].filter((link) => link.value > 0);
+  return { nodes, links };
 };
 
-// --- Analytics Hooks ---
+// ... (Accused, Admin, RAG functions) ...
+const getUsers = async (): Promise<User[]> => {
+  const { data } = await apiClient.get("/admin/users");
+  return data;
+};
+export type UserCreateData = {
+  username: string;
+  full_name: string;
+  password: string;
+  role: UserRole;
+  district?: string;
+  police_station?: string;
+};
+const createUser = async (userData: UserCreateData): Promise<User> => {
+  const { data } = await apiClient.post("/admin/users", userData);
+  return data;
+};
+export type AccusedSearchResult = {
+  id: string;
+  name: string;
+  alias: string;
+  case_count: number;
+};
+export type AccusedProfile = {
+  id: string;
+  name: string;
+  aliases: string[];
+  is_habitual_offender: boolean;
+  case_history: Case[];
+};
+const searchAccused = async (q: string): Promise<AccusedSearchResult[]> => {
+  if (!q) return [];
+  const { data } = await apiClient.get(`/accused/search?q=${q}`);
+  return data;
+};
+const getAccusedById = async (id: string): Promise<AccusedProfile> => {
+  const { data } = await apiClient.get(`/accused/${id}/profile`); // Use the correct endpoint
+  return data;
+};
+
+/*
+  --------------------
+  React Query hooks
+  --------------------
+*/
+
+// --- 5. USE GET CASES (Fixed for Pagination) ---
+export const useGetCases = (
+  q: string,
+  filters: CaseFilterParams,
+  skip: number,
+  limit: number
+) => {
+  return useQuery<Case[], Error>({
+    queryKey: ["cases", q, filters, skip, limit],
+    queryFn: () => getCases(q, filters, skip, limit),
+    keepPreviousData: true,
+  });
+};
+
+export const useGetMetadataFields = () => {
+  return useQuery<MetadataFields, Error>({
+    queryKey: ["metadataFields"],
+    queryFn: getMetadataFields,
+    staleTime: 1000 * 60 * 5, // 5 minutes
+    refetchOnWindowFocus: false,
+  });
+};
 
 export const useGetKpis = () => {
-  return useQuery<KpiData, Error>({
+  return useQuery<KPIData, Error>({
     queryKey: ["kpis"],
     queryFn: getKpis,
   });
@@ -921,31 +1018,35 @@ export const useGetKpis = () => {
 export const useGetConvictionRate = (groupBy: string) => {
   return useQuery<ConvictionChartData[], Error>({
     queryKey: ["convictionRate", groupBy],
-    queryFn: () => fetchConvictionRate(groupBy), // Use the transformer
+    queryFn: () => getConvictionRate(groupBy),
   });
 };
 
-// --- FEATURE: Added Acquittal Rate hook ---
+// --- 6. USE GET ACQUITTAL RATE (New Hook) ---
 export const useGetAcquittalRate = (groupBy: string) => {
   return useQuery<AcquittalChartData[], Error>({
     queryKey: ["acquittalRate", groupBy],
-    queryFn: () => fetchAcquittalRate(groupBy),
+    queryFn: () => getAcquittalRate(groupBy),
   });
 };
 
-// --- FIX: Updated useGetTrends hook ---
+// --- 7. USE GET TRENDS (Fixed params) ---
 export const useGetTrends = (filters: TrendsFilterParams) => {
   return useQuery<TrendData[], Error>({
-    // Use TrendData (transformed)
     queryKey: ["trends", filters],
-    queryFn: () => getTrends(filters), // Use the new getTrends
+    queryFn: () => getTrends(filters),
   });
 };
 
-export const useGetPerformanceRanking = (groupBy: string) => {
-  return useQuery<PerformanceData[], Error>({
-    queryKey: ["performanceRanking", groupBy],
-    queryFn: () => getPerformanceRanking(groupBy),
+export const useGetPerformanceRanking = (
+  groupBy: string,
+  skip: number,
+  limit: number
+) => {
+  return useQuery<RankingData[], Error>({
+    queryKey: ["performanceRanking", groupBy, skip, limit],
+    queryFn: () => getPerformanceRanking(groupBy, skip, limit),
+    keepPreviousData: true,
   });
 };
 
@@ -953,5 +1054,49 @@ export const useGetSankeyData = () => {
   return useQuery<SankeyData, Error>({
     queryKey: ["sankeyData"],
     queryFn: getSankeyData,
+  });
+};
+
+// --- (Admin hooks) ---
+export const useGetUsers = () => {
+  return useQuery<User[], Error>({
+    queryKey: ["users"],
+    queryFn: getUsers,
+  });
+};
+
+export const useCreateUser = () => {
+  const queryClient = useQueryClient();
+  return useMutation<User, Error, UserCreateData>({
+    mutationFn: createUser,
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["users"] });
+    },
+  });
+};
+
+// --- (Accused hooks) ---
+export const useSearchAccused = (q: string) => {
+  return useQuery<AccusedSearchResult[], Error>({
+    queryKey: ["accusedSearch", q],
+    queryFn: () => searchAccused(q),
+    enabled: !!q,
+  });
+};
+
+export const useGetAccusedById = (id: string | null) => {
+  return useQuery<AccusedProfile, Error>({
+    queryKey: ["accusedProfile", id],
+    queryFn: () => getAccusedById(id!),
+    enabled: !!id,
+  });
+};
+
+// --- (Case Detail hook) ---
+export const useGetCaseById = (id: string | null) => {
+  return useQuery<Case, Error>({
+    queryKey: ["caseDetail", id],
+    queryFn: () => fetchCaseDetails(id!),
+    enabled: !!id,
   });
 };
