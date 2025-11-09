@@ -5,7 +5,6 @@ import { useAuthStore } from "@/lib/auth-store";
 import KpiCards from "@/components/dashboard/kpi-cards";
 import ConvictionRateChart from "@/components/dashboard/conviction-rate-chart";
 import PerformanceRankings from "@/components/dashboard/performance-rankings";
-import CaseList from "@/components/dashboard/case-list";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import {
   useGetCases,
@@ -20,8 +19,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { TrendsChart } from "@/components/dashboard/trends-chart";
-import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+
+// --- Import the new components ---
+import CaseExplorer from "@/components/dashboard/case-explorer";
+import AcquittalRateChart from "@/components/dashboard/acquittal-rate-chart";
 import ChargesheetSankey from "@/components/dashboard/chargesheet-sankey";
+import CaseList from "@/components/dashboard/case-list";
 
 export default function DashboardPage() {
   const { user } = useAuthStore();

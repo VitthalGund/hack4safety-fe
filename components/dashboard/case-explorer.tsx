@@ -1,35 +1,32 @@
-// components/dashboard/case-explorer.tsx
-
 "use client";
 
 import { useState } from "react";
 import {
   Card,
-  CardHeader,
-  CardTitle,
-  CardContent,
-} from "@/components/ui/card";
-import {
+  Title,
   Table,
-  TableBody,
-  TableCell,
   TableHead,
-  TableHeader,
+  TableHeaderCell,
+  TableBody,
   TableRow,
-} from "@/components/ui/table";
-import { Badge } from "@/components/ui/badge";
-import { Button } from "@/components/ui/button";
-import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
-import {
-  useGetCases,
-  CaseFilterParams,
-  Case,
-} from "@/lib/api-services";
+  TableCell,
+  Text,
+  Badge,
+  BadgeProps,
+} from "@tremor/react";
+import { useGetCases, CaseFilterParams, Case } from "@/lib/api-services";
 import { Loader2, AlertCircle, ChevronLeft, ChevronRight } from "lucide-react";
 import CaseDetailModal from "./case-detail-modal";
+import { Button } from "@/components/ui/button";
 import { useAuthStore } from "@/lib/auth-store";
 
-// --- Pagination Limit ---
+// Define badge colors
+const resultColorMap: { [key: string]: BadgeProps["color"] } = {
+  Convicted: "emerald",
+  Acquitted: "rose",
+};
+
+// Set pagination limit
 const LIMIT = 5; // Show 5 cases per page
 
 export default function CaseExplorer() {
@@ -49,7 +46,7 @@ export default function CaseExplorer() {
     isLoading,
     isError,
     error,
-  }_ = useGetCases(search, filters, skip, LIMIT);
+  } = useGetCases(search, filters, skip, LIMIT);
 
   const handleNext = () => {
     if (cases && cases.length === LIMIT) {
@@ -63,92 +60,75 @@ export default function CaseExplorer() {
 
   return (
     <>
-      <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
-          <CardTitle>Case Explorer</CardTitle>
-          {/* Pagination Controls */}
-          <div className="flex items-center gap-2">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handlePrev}
-              disabled={skip === 0 || isLoading}
-            >
-              <ChevronLeft className="w-4 h-4 mr-1" />
-              Previous
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleNext}
-              disabled={!cases || cases.length < LIMIT || isLoading}
-            >
-              Next
-              <ChevronRight className="w-4 h-4 ml-1" />
-            </Button>
+      <Card className="h-full flex flex-col dark:border-slate-700">
+        <Title className="dark:text-white p-6">Case Explorer</Title>
+
+        {isLoading && (
+          <div className="flex-grow flex items-center justify-center">
+            <Loader2 className="w-8 h-8 animate-spin text-indigo-600 dark:text-indigo-400" />
           </div>
-        </CardHeader>
-        <CardContent>
-          {isLoading && (
-            <div className="h-60 flex items-center justify-center">
-              <Loader2 className="w-8 h-8 animate-spin text-indigo-600" />
-            </div>
-          )}
-          {isError && (
-            <Alert variant="destructive" className="h-60">
-              <AlertCircle className="h-4 w-4" />
-              <AlertTitle>Error</AlertTitle>
-              <AlertDescription>
-                {error?.message || "Failed to load cases."}
-              </AlertDescription>
-            </Alert>
-          )}
-          {!isLoading && !isError && cases && (
-            <Table>
-              <TableHeader>
+        )}
+
+        {isError && (
+          <div className="flex-grow flex items-center justify-center text-red-600 dark:text-red-400">
+            <AlertCircle className="w-6 h-6 mr-2" />
+            <Text color="red">Error: {error?.message}</Text>
+          </div>
+        )}
+
+        {!isLoading && !isError && cases && (
+          <>
+            <Table className="px-6">
+              <TableHead>
                 <TableRow>
-                  <TableHead>Case Number</TableHead>
-                  <TableHead>Accused</TableHead>
-                  <TableHead>IO</TableHead>
-                  <TableHead>Sections</TableHead>
-                  <TableHead>Status</TableHead>
+                  <TableHeaderCell>Case Number</TableHeaderCell>
+                  <TableHeaderCell>Accused Name</TableHeaderCell>
+                  <TableHeaderCell>Investigating Officer</TableHeaderCell>
+                  <TableHeaderCell>Sections</TableHeaderCell>
+                  <TableHeaderCell>Result</TableHeaderCell>
                 </TableRow>
-              </TableHeader>
+              </TableHead>
               <TableBody>
                 {cases.length === 0 && (
                   <TableRow>
                     <TableCell colSpan={5} className="text-center">
-                      No cases found.
+                      <Text>No cases found.</Text>
                     </TableCell>
                   </TableRow>
                 )}
                 {cases.map((item) => (
                   <TableRow
                     key={item._id}
-                    className="cursor-pointer hover:bg-muted/50"
+                    className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
                     onClick={() => setSelectedCaseId(item._id)}
                   >
-                    <TableCell className="font-medium">
-                      {item.Case_Number}
-                      <div className="text-xs text-muted-foreground">
+                    <TableCell>
+                      <Text className="dark:text-white font-medium">
+                        {item.Case_Number}
+                      </Text>
+                      <Text className="dark:text-slate-400">
                         {item.Police_Station}
-                      </div>
+                      </Text>
                     </TableCell>
-                    <TableCell>{item.Accused_Name}</TableCell>
-                    <TableCell>{item.Investigating_Officer}</TableCell>
-                    <TableCell>{item.Sections_at_Final}</TableCell>
+                    <TableCell>
+                      <Text className="dark:text-white">
+                        {item.Accused_Name}
+                      </Text>
+                    </TableCell>
+                    <TableCell>
+                      <Text className="dark:text-white">
+                        {item.Investigating_Officer}
+                      </Text>
+                    </TableCell>
+                    <TableCell>
+                      <Text className="dark:text-white">
+                        {item.Sections_at_Final}
+                      </Text>
+                    </TableCell>
                     <TableCell>
                       <Badge
-                        variant={
-                          item.Result === "Convicted"
-                            ? "default"
-                            : "secondary"
-                        }
-                        className={
-                          item.Result === "Convicted"
-                            ? "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
-                            : "bg-rose-500/10 text-rose-700 dark:bg-rose-950 dark:text-rose-400"
-                        }
+                        color={resultColorMap[item.Result] || "gray"}
+                        className="capitalize"
                       >
                         {item.Result}
                       </Badge>
@@ -157,8 +137,30 @@ export default function CaseExplorer() {
                 ))}
               </TableBody>
             </Table>
-          )}
-        </CardContent>
+
+            {/* Pagination Controls */}
+            <div className="mt-auto p-4 flex items-center justify-end gap-2 border-t dark:border-slate-700">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handlePrev}
+                disabled={skip === 0 || isLoading}
+              >
+                <ChevronLeft className="w-4 h-4 mr-1" />
+                Previous
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleNext}
+                disabled={!cases || cases.length < LIMIT || isLoading}
+              >
+                Next
+                <ChevronRight className="w-4 h-4 ml-1" />
+              </Button>
+            </div>
+          </>
+        )}
       </Card>
 
       <CaseDetailModal

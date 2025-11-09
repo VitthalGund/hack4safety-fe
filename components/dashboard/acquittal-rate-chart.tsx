@@ -15,7 +15,7 @@ export default function AcquittalRateChart() {
   const chartData = data || [];
 
   return (
-    <Card className="h-full dark:border-slate-700">
+    <Card className="h-full bg-white dark:border-slate-700 p-6">
       <div className="flex justify-between items-center">
         <Title className="dark:text-white">
           Acquittal Rate by {groupBy.replace("_", " ")}
