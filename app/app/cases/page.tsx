@@ -21,13 +21,37 @@ import {
   FormItem,
   FormLabel,
 } from "@/components/ui/form";
-import CaseList from "@/components/dashboard/case-list";
+// import CaseList from "@/components/dashboard/case-list"; // <-- REMOVED
 import {
   useGetCases,
   useGetMetadataFields,
   CaseFilterParams,
 } from "@/lib/api-services";
 import { Skeleton } from "@/components/ui/skeleton";
+
+// --- INLINED COMPONENTS ---
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from "@/components/ui/table";
+import {
+  Pagination,
+  PaginationContent,
+  PaginationEllipsis,
+  PaginationItem,
+  PaginationLink,
+  PaginationNext,
+  PaginationPrevious,
+} from "@/components/ui/pagination";
+import { Badge } from "@/components/ui/badge";
+import CaseDetailModal from "@/components/dashboard/case-detail-modal";
+import { Case } from "@/types/case";
+import { Card } from "@tremor/react";
+// --- END INLINED ---
 
 // Schema for the filter form
 const caseFilterSchema = z.object({
@@ -50,6 +74,12 @@ export default function CaseExplorerPage() {
   const [filter, setFilter] = useState<CaseFilterParams>({});
   const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
 
+  // --- NEW: Pagination and Modal state ---
+  const [page, setPage] = useState(1);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
+  const itemsPerPage = 10;
+  // --- END NEW ---
+
   const form = useForm<CaseFilterSchema>({
     resolver: zodResolver(caseFilterSchema),
     defaultValues: {
@@ -70,14 +100,20 @@ export default function CaseExplorerPage() {
   const { data: metadata, isLoading: isLoadingMetadata } =
     useGetMetadataFields();
 
-  // Fetch cases based on search and filters
-  const { data: cases, isLoading: isLoadingCases } = useGetCases(
+  // --- MODIFIED: Fetch cases with pagination ---
+  const { data: casesResponse, isLoading: isLoadingCases } = useGetCases(
     debouncedSearchTerm,
-    filter
+    filter,
+    page
   );
 
+  const cases = casesResponse || [];
+  const totalCases = casesResponse?.length || 0;
+  const totalPages = Math.ceil(totalCases / itemsPerPage);
+  // --- END MODIFIED ---
+
   const onSubmit = (values: CaseFilterSchema) => {
-    // Remove empty strings from filter values
+    setPage(1); // Reset to first page on new filter
     const cleanedFilters = Object.entries(values).reduce(
       (acc, [key, value]) => {
         if (value) {
@@ -93,6 +129,7 @@ export default function CaseExplorerPage() {
   const clearFilters = () => {
     form.reset();
     setFilter({});
+    setPage(1);
   };
 
   // Helper to render dropdown options
@@ -104,12 +141,21 @@ export default function CaseExplorerPage() {
         </SelectItem>
       );
     }
+    // Handle potential undefined metadata
     return metadata?.[field]?.map((item) => (
       <SelectItem key={item} value={item} className="truncate">
         {item}
       </SelectItem>
     ));
   };
+
+  // --- NEW: Pagination handlers ---
+  const handlePageChange = (newPage: number) => {
+    if (newPage >= 1 && newPage <= totalPages) {
+      setPage(newPage);
+    }
+  };
+  // --- END NEW ---
 
   return (
     <div className="container mx-auto p-4 md:p-6">
@@ -126,9 +172,8 @@ export default function CaseExplorerPage() {
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Responsive grid: reflows from 1 -> 2 -> 3 -> 4 -> 5 columns */}
+            {/* --- [Dropdown FormFields remain unchanged] --- */}
             <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-4">
-              {/* --- 2. ALL 10 DROPDOWNS --- */}
               <FormField
                 control={form.control}
                 name="district"
@@ -151,7 +196,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="police_station"
@@ -176,7 +220,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="court_name"
@@ -199,7 +242,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="investigating_officer"
@@ -224,7 +266,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="rank"
@@ -247,7 +288,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="crime_type"
@@ -270,7 +310,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="result"
@@ -293,7 +332,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="sections_of_law"
@@ -318,7 +356,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="pp_name"
@@ -343,7 +380,6 @@ export default function CaseExplorerPage() {
                   </FormItem>
                 )}
               />
-
               <FormField
                 control={form.control}
                 name="judge_name"
@@ -385,6 +421,7 @@ export default function CaseExplorerPage() {
         </Form>
       </div>
 
+      {/* --- MODIFIED: Inlined CaseList logic --- */}
       <div>
         {isLoadingCases ? (
           <div className="space-y-4">
@@ -393,9 +430,112 @@ export default function CaseExplorerPage() {
             <Skeleton className="h-24 w-full" />
           </div>
         ) : (
-          <CaseList cases={cases || []} />
+          <Card>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Case Number</TableHead>
+                  <TableHead>Accused</TableHead>
+                  <TableHead>Sections</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>District</TableHead>
+                  <TableHead>Police Station</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {cases.map((item: Case) => (
+                  <TableRow
+                    key={item._id}
+                    className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                    onClick={() => setSelectedCaseId(item._id)}
+                  >
+                    <TableCell className="font-medium">
+                      {item.Case_Number}
+                    </TableCell>
+                    <TableCell>{item.Accused_Name}</TableCell>
+                    <TableCell>{item.Sections_of_Law}</TableCell>
+                    <TableCell>
+                      <Badge
+                        variant={
+                          item.Result === "Conviction" ? "default" : "secondary"
+                        }
+                        className={
+                          item.Result === "Conviction"
+                            ? "bg-emerald-500/10 text-emerald-700 dark:bg-emerald-950 dark:text-emerald-400"
+                            : "bg-amber-500/10 text-amber-700 dark:bg-amber-950 dark:text-amber-400"
+                        }
+                      >
+                        {item.Result}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>{item.District}</TableCell>
+                    <TableCell>{item.Police_Station}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+
+            {/* --- NEW: Pagination Component --- */}
+            <div className="p-4 border-t">
+              <Pagination>
+                <PaginationContent>
+                  <PaginationItem>
+                    <PaginationPrevious
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handlePageChange(page - 1);
+                      }}
+                      className={
+                        page <= 1 ? "pointer-events-none opacity-50" : ""
+                      }
+                    />
+                  </PaginationItem>
+
+                  {/* Simplified Pagination: Just show current page */}
+                  <PaginationItem>
+                    <PaginationLink href="#" isActive>
+                      {page}
+                    </PaginationLink>
+                  </PaginationItem>
+                  <PaginationItem>
+                    <PaginationEllipsis />
+                  </PaginationItem>
+                  <PaginationItem>
+                    <span className="p-2 text-sm text-muted-foreground">
+                      Total Pages: {totalPages}
+                    </span>
+                  </PaginationItem>
+
+                  <PaginationItem>
+                    <PaginationNext
+                      href="#"
+                      onClick={(e) => {
+                        e.preventDefault();
+                        handlePageChange(page + 1);
+                      }}
+                      className={
+                        page >= totalPages
+                          ? "pointer-events-none opacity-50"
+                          : ""
+                      }
+                    />
+                  </PaginationItem>
+                </PaginationContent>
+              </Pagination>
+            </div>
+            {/* --- END NEW --- */}
+          </Card>
         )}
       </div>
+      {/* --- END INLINED --- */}
+
+      {/* --- NEW: Inlined Modal --- */}
+      <CaseDetailModal
+        caseId={selectedCaseId}
+        isOpen={!!selectedCaseId}
+        onClose={() => setSelectedCaseId(null)}
+      />
     </div>
   );
 }
