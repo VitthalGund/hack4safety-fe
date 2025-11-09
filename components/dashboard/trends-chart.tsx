@@ -66,9 +66,11 @@ const months = [
 ];
 
 export function TrendsChart() {
+  const currentYear = new Date().getFullYear();
+
   const [filters, setFilters] = useState<TrendsFilterParams>({
     crime_type: null,
-    year: null,
+    year: currentYear,
     month: null,
   });
 
