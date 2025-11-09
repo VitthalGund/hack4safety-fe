@@ -1,13 +1,14 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState } from "react";
 import {
-  Area,
-  AreaChart,
+  Line, // <-- CHANGED
+  LineChart, // <-- CHANGED
   CartesianGrid,
   ResponsiveContainer,
   XAxis,
   YAxis,
+  Label, // <-- ADDED
 } from "recharts";
 import {
   ChartConfig,
@@ -16,127 +17,287 @@ import {
   ChartTooltipContent,
 } from "@/components/ui/chart";
 import { Skeleton } from "../ui/skeleton";
-import { TrendData } from "@/lib/api-services";
+import {
+  useGetTrends,
+  useGetMetadataFields,
+  TrendData,
+  TrendsFilterParams,
+} from "@/lib/api-services";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
+import { AlertCircle, Loader2 } from "lucide-react";
 
-type TrendsChartProps = {
-  data: TrendData[] | undefined;
-  isLoading: boolean;
-  period: "monthly" | "yearly";
-};
-
-// --- MODIFIED: Updated chart config for Area chart ---
+// --- FIX: Correct keys. Using non-grey colors. ---
 const chartConfig = {
-  total_convictions: {
+  Convicted: {
     label: "Convictions",
-    color: "hsl(var(--chart-2))",
+    color: "hsl(221.2 83.2% 53.3%)", // Vibrant Blue
   },
-  total_acquittals: {
+  Acquitted: {
     label: "Acquittals",
-    color: "hsl(var(--chart-1))",
+    color: "hsl(346.8 77.2% 49.8%)", // Vibrant Red
   },
 } satisfies ChartConfig;
 
-export function TrendsChart({ data, isLoading, period }: TrendsChartProps) {
-  // useMemo logic remains the same, it is correct
+// --- Year and month filters ---
+const currentYear = new Date().getFullYear();
+const years = Array.from({ length: 10 }, (_, i) => currentYear - i); // Last 10 years
+const months = [
+  { value: 1, name: "Jan" },
+  { value: 2, name: "Feb" },
+  { value: 3, name: "Mar" },
+  { value: 4, name: "Apr" },
+  { value: 5, name: "May" },
+  { value: 6, name: "Jun" },
+  { value: 7, name: "Jul" },
+  { value: 8, name: "Aug" },
+  { value: 9, name: "Sep" },
+  { value: 10, name: "Oct" },
+  { value: 11, name: "Nov" },
+  { value: 12, name: "Dec" },
+];
+
+export function TrendsChart() {
+  const [filters, setFilters] = useState<TrendsFilterParams>({
+    crime_type: null,
+    year: null,
+    month: null,
+  });
+
+  const [period, setPeriod] = useState<"monthly" | "yearly">("monthly");
+
+  const { data, isLoading, isError, error } = useGetTrends(filters);
+  const { data: metadata, isLoading: isLoadingMetadata } =
+    useGetMetadataFields();
+
+  // --- FIX: This is the corrected aggregation logic ---
   const chartData = useMemo(() => {
     if (!data) return [];
 
     if (period === "yearly") {
-      // Aggregate data by year
       const yearlyData = data.reduce((acc, month) => {
-        const year = month.year;
+        // month.date is "Jan '23", so we parse it
+        const year = "20" + month.date.split(" '")[1];
+
         if (!acc[year]) {
           acc[year] = {
             name: String(year),
-            total_convictions: 0,
-            total_acquittals: 0,
+            Convicted: 0,
+            Acquitted: 0,
           };
         }
-        acc[year].total_convictions += month.total_convictions;
-        acc[year].total_acquittals += month.total_acquittals;
+        acc[year].Convicted += month.Convicted;
+        acc[year].Acquitted += month.Acquitted;
         return acc;
-      }, {} as Record<string, { name: string; total_convictions: number; total_acquittals: number }>);
-      return Object.values(yearlyData);
+      }, {} as Record<string, { name: string; Convicted: number; Acquitted: number }>);
+
+      return Object.values(yearlyData).sort((a, b) =>
+        a.name.localeCompare(b.name)
+      );
     }
 
-    // Default: Format for monthly
-    return data.map((month) => ({
-      name: `${month.year}-${String(month.month).padStart(2, "0")}`,
-      total_convictions: month.total_convictions,
-      total_acquittals: month.total_acquittals,
-    }));
+    // Default: return monthly data (it's already formatted)
+    return data;
   }, [data, period]);
 
-  if (isLoading) {
-    return <Skeleton className="h-[350px] w-full" />;
-  }
+  // --- Handlers for filters ---
+  const handleYearChange = (v: string) => {
+    const newYear = v ? parseInt(v) : null;
+    setFilters((f) => ({ ...f, year: newYear, month: null }));
+  };
+
+  const handleMonthChange = (v: string) => {
+    setFilters((f) => ({ ...f, month: v ? parseInt(v) : null }));
+  };
+
+  const handleCrimeTypeChange = (v: string) => {
+    setFilters((f) => ({ ...f, crime_type: v === "all" ? null : v }));
+  };
+
+  const handlePeriodChange = (value: "monthly" | "yearly") => {
+    if (value) setPeriod(value);
+  };
 
   return (
-    <ChartContainer config={chartConfig} className="h-[350px] w-full">
-      <ResponsiveContainer width="100%" height="100%">
-        {/* --- MODIFIED: Swapped BarChart for AreaChart --- */}
-        <AreaChart
-          data={chartData}
-          margin={{
-            left: 12,
-            right: 12,
-          }}
-        >
-          <CartesianGrid vertical={false} />
-          <XAxis
-            dataKey="name"
-            tickLine={false}
-            tickMargin={10}
-            axisLine={false}
-            interval={period === "yearly" ? 0 : "auto"}
-          />
-          <YAxis tickLine={false} axisLine={false} tickMargin={10} width={30} />
-          <ChartTooltip
-            cursor={false}
-            content={<ChartTooltipContent indicator="line" />}
-          />
-          <defs>
-            <linearGradient id="fillConvictions" x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="5%"
-                stopColor="var(--color-total_convictions)"
-                stopOpacity={0.8}
-              />
-              <stop
-                offset="95%"
-                stopColor="var(--color-total_convictions)"
-                stopOpacity={0.1}
-              />
-            </linearGradient>
-            <linearGradient id="fillAcquittals" x1="0" y1="0" x2="0" y2="1">
-              <stop
-                offset="5%"
-                stopColor="var(--color-total_acquittals)"
-                stopOpacity={0.8}
-              />
-              <stop
-                offset="95%"
-                stopColor="var(--color-total_acquittals)"
-                stopOpacity={0.1}
-              />
-            </linearGradient>
-          </defs>
-          <Area
-            dataKey="total_convictions"
-            type="monotone"
-            fill="url(#fillConvictions)"
-            stroke="var(--color-total_convictions)"
-            stackId="1"
-          />
-          <Area
-            dataKey="total_acquittals"
-            type="monotone"
-            fill="url(#fillAcquittals)"
-            stroke="var(--color-total_acquittals)"
-            stackId="1"
-          />
-        </AreaChart>
-      </ResponsiveContainer>
-    </ChartContainer>
+    <Card>
+      <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <CardTitle>Trends Over Time</CardTitle>
+        {/* Filters are unchanged */}
+        <div className="flex flex-col gap-2 md:flex-row">
+          <Select
+            value={filters.crime_type || "all"}
+            onValueChange={handleCrimeTypeChange}
+          >
+            <SelectTrigger className="w-full md:w-[160px]">
+              <SelectValue placeholder="Select Crime Type" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Crime Types</SelectItem>
+              {isLoadingMetadata ? (
+                <SelectItem value="loading" disabled>
+                  Loading...
+                </SelectItem>
+              ) : (
+                metadata?.Crime_Type?.map((type) => (
+                  <SelectItem key={type} value={type}>
+                    {type}
+                  </SelectItem>
+                ))
+              )}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.year?.toString() || "all"}
+            onValueChange={handleYearChange}
+          >
+            <SelectTrigger className="w-full md:w-[110px]">
+              <SelectValue placeholder="Select Year" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Years</SelectItem>
+              {years.map((y) => (
+                <SelectItem key={y} value={y.toString()}>
+                  {y}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <Select
+            value={filters.month?.toString() || "all"}
+            onValueChange={handleMonthChange}
+            disabled={!filters.year}
+          >
+            <SelectTrigger className="w-full md:w-[110px]">
+              <SelectValue placeholder="Select Month" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Months</SelectItem>
+              {months.map((m) => (
+                <SelectItem key={m.value} value={m.value.toString()}>
+                  {m.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          <ToggleGroup
+            type="single"
+            value={period}
+            onValueChange={handlePeriodChange}
+            className="w-full md:w-auto"
+          >
+            <ToggleGroupItem value="monthly" className="w-full">
+              Monthly
+            </ToggleGroupItem>
+            <ToggleGroupItem value="yearly" className="w-full">
+              Yearly
+            </ToggleGroupItem>
+          </ToggleGroup>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading && <Skeleton className="h-[350px] w-full" />}
+        {isError && (
+          <Alert variant="destructive" className="h-[350px]">
+            <AlertCircle className="h-4 w-4" />
+            <AlertTitle>Error</AlertTitle>
+            <AlertDescription>
+              {error?.message || "Failed to load trends data."}
+            </AlertDescription>
+          </Alert>
+        )}
+        {!isLoading && !isError && (
+          <ChartContainer config={chartConfig} className="h-[350px] w-full">
+            <ResponsiveContainer width="100%" height="100%">
+              {/* --- 1. CHANGED to LineChart --- */}
+              <LineChart
+                data={chartData}
+                margin={{
+                  left: 12, // Increased left margin for Y-axis label
+                  right: 12,
+                  top: 10,
+                  bottom: 20, // Increased bottom margin for X-axis label
+                }}
+              >
+                <CartesianGrid vertical={false} />
+
+                {/* --- 2. ADDED X-Axis Label --- */}
+                <XAxis
+                  dataKey="name"
+                  tickLine={false}
+                  tickMargin={10}
+                  axisLine={false}
+                  interval={period === "yearly" ? 0 : "auto"}
+                  fontSize={12}
+                >
+                  <Label value="Time" position="insideBottom" offset={-15} />
+                </XAxis>
+
+                {/* --- 3. ADDED Y-Axis Label --- */}
+                <YAxis
+                  tickLine={false}
+                  axisLine={false}
+                  tickMargin={9}
+                  width={30}
+                  fontSize={12}
+                >
+                  <Label
+                    value="Total Cases"
+                    angle={-90}
+                    position="insideLeft"
+                    style={{ textAnchor: "middle" }}
+                  />
+                </YAxis>
+
+                <ChartTooltip
+                  cursor={false}
+                  content={<ChartTooltipContent indicator="line" />}
+                />
+
+                {/* --- 4. REMOVED <defs> (not needed for Line) --- */}
+
+                {/* --- 5. CHANGED Area to Line, added dots --- */}
+                <Line
+                  dataKey="Convicted"
+                  type="monotone"
+                  stroke="var(--color-Convicted)"
+                  strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    fill: "var(--color-Convicted)",
+                  }}
+                  activeDot={{
+                    r: 6,
+                  }}
+                />
+                <Line
+                  dataKey="Acquitted"
+                  type="monotone"
+                  stroke="var(--color-Acquitted)"
+                  strokeWidth={2}
+                  dot={{
+                    r: 3,
+                    fill: "var(--color-Acquitted)",
+                  }}
+                  activeDot={{
+                    r: 6,
+                  }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </ChartContainer>
+        )}
+      </CardContent>
+    </Card>
   );
 }

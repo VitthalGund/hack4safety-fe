@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/select";
 import { TrendsChart } from "@/components/dashboard/trends-chart";
 import { ToggleGroup, ToggleGroupItem } from "@/components/ui/toggle-group";
+import ChargesheetSankey from "@/components/dashboard/chargesheet-sankey";
 
 export default function DashboardPage() {
   const { user } = useAuthStore();
@@ -50,53 +51,6 @@ export default function DashboardPage() {
         <ConvictionRateChart />
 
         <Card>
-          <CardHeader className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-            <CardTitle>Trends Over Time</CardTitle>
-            <div className="flex flex-col gap-2 md:flex-row">
-              {/* --- CRIME TYPE FILTER --- */}
-              <Select
-                value={crimeTypeFilter}
-                onValueChange={(value) =>
-                  setCrimeTypeFilter(value === "all" ? "" : value)
-                }
-              >
-                <SelectTrigger className="w-full md:w-[180px]">
-                  <SelectValue placeholder="Select Crime Type" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Crime Types</SelectItem>
-                  {isLoadingMetadata ? (
-                    <SelectItem value="loading" disabled>
-                      Loading...
-                    </SelectItem>
-                  ) : (
-                    metadata?.Crime_Type?.map((type) => (
-                      <SelectItem key={type} value={type}>
-                        {type}
-                      </SelectItem>
-                    ))
-                  )}
-                </SelectContent>
-              </Select>
-
-              {/* --- MONTHLY/YEARLY TOGGLE --- */}
-              <ToggleGroup
-                type="single"
-                value={timePeriod}
-                onValueChange={(value) => {
-                  if (value) setTimePeriod(value as "monthly" | "yearly");
-                }}
-                className="w-full md:w-auto"
-              >
-                <ToggleGroupItem value="monthly" className="w-full">
-                  Monthly
-                </ToggleGroupItem>
-                <ToggleGroupItem value="yearly" className="w-full">
-                  Yearly
-                </ToggleGroupItem>
-              </ToggleGroup>
-            </div>
-          </CardHeader>
           <CardContent>
             {/* --- PASS NEW PROP TO CHART --- */}
             <TrendsChart
@@ -112,6 +66,9 @@ export default function DashboardPage() {
       <div className="flex flex-col gap-6">
         <div className="">
           <PerformanceRankings />
+        </div>
+        <div className="mb-8">
+          <ChargesheetSankey />
         </div>
         <Card>
           <CardHeader>

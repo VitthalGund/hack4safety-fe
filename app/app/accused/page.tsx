@@ -1,110 +1,218 @@
+// app/app/accused/page.tsx
+
 "use client";
 
 import { useState } from "react";
-import { useDebounce } from "use-debounce";
+import {
+  Card,
+  List,
+  ListItem,
+  Text,
+  Title,
+  Badge,
+  BadgeProps,
+  Col,
+  Grid,
+} from "@tremor/react";
+import {
+  useSearchAccused,
+  useGetAccusedById,
+  AccusedSearchResult,
+} from "@/lib/api-services";
+import {
+  Loader2,
+  Search,
+  User,
+  AlertCircle,
+  History,
+  Info,
+  LinkIcon,
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Skeleton } from "@/components/ui/skeleton";
-import { useSearchAccused, useGetAccusedById } from "@/lib/api-services";
-import CaseList from "@/components/dashboard/case-list";
-import { Badge } from "@/components/ui/badge";
+import { Case } from "@/types/case";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import CaseDetailModal from "@/components/dashboard/case-detail-modal";
+import { useDebounce } from "@/hooks/use-debounce";
+
+const resultColorMap: { [key: string]: BadgeProps["color"] } = {
+  Convicted: "emerald",
+  Acquitted: "rose",
+};
 
 export default function Accused360Page() {
-  const [searchTerm, setSearchTerm] = useState("");
-  const [selectedAccusedId, setSelectedAccusedId] = useState<string | null>(
-    null
-  );
-  const [debouncedSearchTerm] = useDebounce(searchTerm, 300);
+  const [query, setQuery] = useState("");
+  const debouncedQuery = useDebounce(query, 300);
+  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedCaseId, setSelectedCaseId] = useState<string | null>(null);
 
-  const { data: searchResults, isLoading: isSearching } =
-    useSearchAccused(debouncedSearchTerm);
+  const {
+    data: searchResults,
+    isLoading: isSearching,
+    isError: isSearchError,
+    error: searchError,
+  } = useSearchAccused(debouncedQuery);
 
-  const { data: accusedProfile, isLoading: isLoadingProfile } =
-    useGetAccusedById(selectedAccusedId);
-
-  const handleSelectAccused = (id: string) => {
-    setSearchTerm(""); // Clear search bar
-    setSelectedAccusedId(id);
-  };
+  const {
+    data: profile,
+    isLoading: isLoadingProfile,
+    isError: isProfileError,
+    error: profileError,
+  } = useGetAccusedById(selectedId);
 
   return (
-    <div className="container mx-auto p-4 md:p-6">
-      <h1 className="mb-4 text-2xl font-bold">Accused 360°</h1>
-
-      <div className="mb-6 space-y-2">
-        <Input
-          placeholder="Search for an accused by name or alias..."
-          className="w-full"
-          value={searchTerm}
-          onChange={(e) => {
-            setSearchTerm(e.target.value);
-            setSelectedAccusedId(null); // Clear profile when typing
-          }}
-        />
-        {/* Search Results Dropdown */}
-        {debouncedSearchTerm && (
-          <Card className="absolute z-10 w-full max-w-md">
-            <CardContent className="p-2">
-              {isSearching && <div className="p-2 text-sm">Searching...</div>}
-              {!isSearching && searchResults && searchResults.length === 0 && (
-                <div className="p-2 text-sm">No results found.</div>
-              )}
-              {!isSearching && searchResults && searchResults.length > 0 && (
-                <ul className="space-y-1">
-                  {searchResults.map((accused) => (
-                    <li
-                      key={accused.id}
-                      className="cursor-pointer rounded p-2 hover:bg-muted"
-                      onClick={() => handleSelectAccused(accused.id)}
-                    >
-                      <div className="font-medium">{accused.name}</div>
-                      <div className="text-sm text-muted-foreground">
-                        {accused.alias && `(Alias: ${accused.alias}) `}
-                        Cases: {accused.case_count}
-                      </div>
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </CardContent>
-          </Card>
-        )}
-      </div>
-
-      {/* Profile Display */}
-      {isLoadingProfile && (
-        <Card>
-          <CardHeader>
-            <Skeleton className="h-8 w-1/2" />
-            <Skeleton className="h-4 w-1/4" />
-          </CardHeader>
-          <CardContent className="space-y-4">
-            <Skeleton className="h-24 w-full" />
-            <Skeleton className="h-24 w-full" />
-          </CardContent>
-        </Card>
-      )}
-
-      {accusedProfile && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center space-x-2 text-2xl">
-              <span>{accusedProfile.name}</span>
-              {accusedProfile.is_habitual_offender && (
-                <Badge variant="destructive">Habitual Offender</Badge>
-              )}
-            </CardTitle>
-            <div className="text-muted-foreground">
-              {accusedProfile.aliases?.length > 0 &&
-                `Aliases: ${accusedProfile.aliases.join(", ")}`}
+    <Grid numItemsLg={3} className="gap-6 h-[calc(100vh-100px)]">
+      {/* Left Column: Search and Results */}
+      <Col numColSpanLg={1} className="h-full">
+        <Card className="h-full flex flex-col dark:border-slate-700">
+          <Title className="p-6 dark:text-white">Search Accused</Title>
+          <div className="px-6 pb-4">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-slate-500" />
+              <Input
+                placeholder="Search by name or alias..."
+                className="pl-9 dark:bg-slate-700 dark:border-slate-600"
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+              />
             </div>
-          </CardHeader>
-          <CardContent>
-            <h3 className="mb-4 text-xl font-semibold">Case History</h3>
-            <CaseList cases={accusedProfile.case_history || []} />
-          </CardContent>
+          </div>
+          <ScrollArea className="flex-grow">
+            {isSearching && (
+              <div className="flex items-center justify-center p-6">
+                <Loader2 className="w-6 h-6 animate-spin text-indigo-500" />
+              </div>
+            )}
+            {isSearchError && (
+              <div className="p-6">
+                <Text color="rose">{searchError.message}</Text>
+              </div>
+            )}
+            <List>
+              {!isSearching &&
+                !isSearchError &&
+                searchResults &&
+                searchResults.map((accused: AccusedSearchResult) => (
+                  <ListItem
+                    key={accused.id}
+                    className={`cursor-pointer ${
+                      selectedId === accused.id
+                        ? "bg-indigo-50 dark:bg-slate-700"
+                        : "hover:bg-slate-50 dark:hover:bg-slate-800"
+                    }`}
+                    onClick={() => setSelectedId(accused.id)}
+                  >
+                    <div className="flex justify-between w-full">
+                      <div>
+                        <Text className="dark:text-white font-medium">
+                          {accused.name}
+                        </Text>
+                        <Text className="dark:text-slate-400">
+                          {accused.alias}
+                        </Text>
+                      </div>
+                      <Badge color="gray">{accused.case_count} cases</Badge>
+                    </div>
+                  </ListItem>
+                ))}
+              {!isSearching &&
+                debouncedQuery &&
+                searchResults?.length === 0 && (
+                  <ListItem className="justify-center">
+                    <Text>No results found.</Text>
+                  </ListItem>
+                )}
+            </List>
+          </ScrollArea>
         </Card>
-      )}
-    </div>
+      </Col>
+
+      {/* Right Column: Profile Details */}
+      <Col numColSpanLg={2} className="h-full">
+        <Card className="h-full flex flex-col dark:border-slate-700">
+          <Title className="p-6 dark:text-white">Accused Profile</Title>
+          <ScrollArea className="flex-grow">
+            {isLoadingProfile && (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="w-8 h-8 animate-spin text-indigo-500" />
+              </div>
+            )}
+            {isProfileError && (
+              <div className="flex flex-col items-center justify-center h-full text-red-500">
+                <AlertCircle className="w-12 h-12 mb-4" />
+                <Title color="rose">Error</Title>
+                <Text>
+                  {profileError.message || "Could not load accused profile."}
+                </Text>
+              </div>
+            )}
+            {!selectedId && !isLoadingProfile && !isProfileError && (
+              <div className="flex flex-col items-center justify-center h-full text-slate-500 dark:text-slate-400">
+                <User className="w-16 h-16 mb-4" />
+                <Title>Select an Accused</Title>
+                <Text>Search for an accused to see their profile.</Text>
+              </div>
+            )}
+            {profile && (
+              <div className="p-6 space-y-6">
+                {/* Profile Header */}
+                <div className="pb-4 border-b dark:border-slate-700">
+                  <Title className="dark:text-white">{profile.name}</Title>
+                  <Text className="dark:text-slate-400">
+                    Aliases: {profile.aliases?.join(", ") || "None"}
+                  </Text>
+                  {profile.is_habitual_offender && (
+                    <Badge color="red" className="mt-2">
+                      Habitual Offender
+                    </Badge>
+                  )}
+                </div>
+
+                {/* Case History */}
+                <div>
+                  <Title
+                    color="indigo"
+                    className="flex items-center gap-2 dark:text-indigo-400"
+                  >
+                    <History className="w-5 h-5" />
+                    Case History
+                  </Title>
+                  <List className="mt-2">
+                    {profile.case_history?.map((caseItem: Case) => (
+                      <ListItem
+                        key={caseItem._id}
+                        className="cursor-pointer hover:bg-slate-50 dark:hover:bg-slate-800"
+                        onClick={() => setSelectedCaseId(caseItem._id)}
+                      >
+                        <div className="flex justify-between w-full">
+                          <div>
+                            <Text className="dark:text-white font-medium">
+                              {caseItem.Case_Number}
+                            </Text>
+                            <Text className="dark:text-slate-400">
+                              {caseItem.Police_Station}
+                            </Text>
+                          </div>
+                          <Badge
+                            color={resultColorMap[caseItem.Result] || "gray"}
+                          >
+                            {caseItem.Result}
+                          </Badge>
+                        </div>
+                      </ListItem>
+                    ))}
+                  </List>
+                </div>
+              </div>
+            )}
+          </ScrollArea>
+        </Card>
+      </Col>
+
+      <CaseDetailModal
+        caseId={selectedCaseId}
+        isOpen={!!selectedCaseId}
+        onClose={() => setSelectedCaseId(null)}
+      />
+    </Grid>
   );
 }
